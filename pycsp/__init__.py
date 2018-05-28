@@ -9,6 +9,71 @@ Experimental implementation of PyCSP using custom Futures that share a global lo
 import threading
 import time
 import random
+import collections
+import functools
+
+
+# ******************** Core code ********************
+
+class ChannelPoisonException(Exception): 
+    pass
+
+### Copied from thread version (classic) 
+def process(func):
+    "Decorator for creating process functions"
+    def _call(*args, **kwargs):
+        return Process(func, *args, **kwargs)
+    return _call
+
+class Process(threading.Thread):
+    """PyCSP process container. Arguments are: <function>, *args, **kwargs. 
+    Checks for and propagates channel poison (see Channels.py)."""
+    def __init__(self, fn, *args, **kwargs):
+        threading.Thread.__init__(self)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+    def run(self):
+        self.retval = None
+        try:
+            # Store the returned value from the process
+            self.retval = self.fn(*self.args, **self.kwargs)
+        except ChannelPoisonException as e:
+            # look for channels and channel ends
+            for ch in [x for x in self.args if isinstance(x, ChannelEnd) or isinstance(x, Channel)]:
+                ch.poison()
+
+def Parallel(*processes):
+    """Parallel construct. Takes a list of processes (Python threads) which are started.
+    The Parallel construct returns when all given processes exit."""
+    # run, then sync with them. 
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+    # return a list of the return values from the processes
+    return [p.retval for p in processes]
+            
+def Sequence(*processes):
+    """Sequence construct. Takes a list of processes (Python threads) which are started.
+    The Sequence construct returns when all given processes exit."""
+    for p in processes:
+        # Call Run directly instead of start() and join() 
+        p.run()
+    # return a list of the return values from the processes
+    return [p.retval for p in processes]
+        
+
+def Spawn(process):
+    """Spawns off and starts a PyCSP process in the background, for
+    independent execution. Returns the started process."""
+    process.start()
+    return process
+
+#####
+
+
+
 
 class CFuture(threading.Condition):
     """Custom future based on a threading.Condition"""
@@ -43,12 +108,11 @@ _globalLock = LockCond()
 
 class Channel:
     def __init__(self):
-        self.lc = LockCond()
         self.rq = []
         self.wq = []
 
     def write(self, val):
-        c = self.lc.get_cfuture()
+        c = _globalLock.get_cfuture()
         with c:
             if len(self.rq) == 0:
                 ## nobody waiting for read
@@ -60,7 +124,7 @@ class Channel:
             r[0].set_result(val)
 
     def read(self):
-        c = self.lc.get_cfuture()
+        c = _globalLock.get_cfuture()
         with c:
             if len(self.wq) == 0:
                 ## nobody waiting to write to us
@@ -72,6 +136,7 @@ class Channel:
             return val
         
 
+@process        
 def writer(p, ch):
     pref = " " * p * 2
     for i in range(10):
@@ -80,7 +145,7 @@ def writer(p, ch):
         ch.write(val)
         print(f"{pref} W {p} done")
         time.sleep(random.random()*3 + 2)
-
+@process
 def reader(p, ch):
     pref = "                     " + " " * p * 2
     time.sleep(0.1)
@@ -92,14 +157,8 @@ def reader(p, ch):
 
 
 ch = Channel()
-threads = [
-    threading.Thread(target=writer, args=[1, ch]), 
-    threading.Thread(target=reader, args=[1, ch]),
-    threading.Thread(target=writer, args=[2, ch]), 
-    threading.Thread(target=reader, args=[2, ch])
-    ]
-for t in threads:
-    t.start()
-for t in threads:
-    t.join()
+Parallel(writer(1, ch),
+         reader(1, ch),
+         writer(2, ch),
+         reader(2, ch))
 print("All done")
