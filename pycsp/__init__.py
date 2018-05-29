@@ -53,7 +53,7 @@ class Process(threading.Thread):
             # Store the returned value from the process
             self.retval = self.fn(*self.args, **self.kwargs)
         except ChannelPoisonException as e:
-            print(f"Process {self.fn}({self.args}, {self.kwargs}) caught poison")
+            #print(f"Process {self.fn}({self.args}, {self.kwargs}) caught poison")
             self.poisoned = True
             # look for channels and channel ends
             for ch in [x for x in self.args if isinstance(x, ChannelEnd) or isinstance(x, Channel)]:

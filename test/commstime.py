@@ -39,7 +39,6 @@ def consumer(cin, run_no):
           (run_no, dt, dt, N, tchan, tchan * 1000000))
     #print("consumer done, posioning channel")
     cin.poison()
-    print("consumer done with poison")
     return tchan
 
 def CommsTimeBM(run_no, Delta2=Delta2):
@@ -60,7 +59,6 @@ def run_bm(Delta2=pycsp.plugNplay.Delta2):
     N_BM = 10
     tchans = []
     for i in range(N_BM):
-        print(f"Iter {i}")
         tchans.append(CommsTimeBM(i, Delta2))
     print("Min {:7.3f}  Avg {:7.3f} Max {:7.3f}".format(1_000_000 * min(tchans),
                                                         1_000_000 * sum(tchans)/len(tchans), 
