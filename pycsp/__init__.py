@@ -94,41 +94,35 @@ def Spawn(process):
 
 
 #############################################################
+# 
+class CFuture:
+    """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
+    management of a Monitor (implemented using a Condition variable).
+    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future. 
+    """
+    # TODO: should consider implementing the wait and set_reult bit directly instead of using a condition variable. 
+    _global_lock = threading.RLock() # shared lock
 
-
-# TODO: should not inherit a Condition interface/type. We may not want it to be used directly as a condition.
-# One example is that with CFuture() as c: sets c to a boolean value. 
-class CFuture(threading.Condition):
-    """Custom future based on a threading.Condition"""
-    def __init__(self, lock):
-        """Must specify lock to create one of these"""
-        super().__init__(lock)
+    def __init__(self):
+        self.cond = threading.Condition(self._global_lock)
         self.result = None
-        self._wait = threading.Condition.wait
+
+    def wait(self):
+        self.cond.wait()
+        return self.result
 
     def set_result(self, res):
         self.result = res
-        self.notify()
+        self.cond.notify()
 
-    def wait(self):
-        self._wait(self)
-        return self.result
-    
-
-class LockCond:
-    def __init__(self):
-        self.lock = threading.RLock()
-
-    def get_cfuture(self):
-        return CFuture(self.lock)
-
-    ### Todo: make an enter/release so we can write it as
-    # with self.lc.get_cfuture() as c:
-    # enter must allocate condition, acquire it and return the lock. 
-    # exit should get the allocated object... how ?
-
-_globalLock = LockCond()
-
+    # context manager. 
+    def __enter__(self):
+        # Condition: return self._lock.__enter__()
+        self.cond.__enter__()
+        return self
+    def __exit__(self, *args):
+        # Condition: return self._lock.__exit__(*args)
+        return self.cond.__exit__(*args)
 
 
 # ******************** Base and simple guards (channel ends should inherit from a Guard) ********************
@@ -304,8 +298,7 @@ class Channel:
     # is almost as lean at an execution time cost closer to the decorator version.
     # TODO: consider how to solve poison checking for the ALT as well. 
     def _read(self):
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             try:
                 if self.poisoned:
                     return
@@ -322,8 +315,7 @@ class Channel:
                     raise ChannelPoisonException()
         
     def _write(self, obj):
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             try:
                 if self.poisoned:
                     return
@@ -346,8 +338,7 @@ class Channel:
         """Poison a channel and wake up all ops in the queues so they can catch the poison."""
         # This doesn't need to be an async method any longer, but we
         # keep it like this to simplify poisoning of remote channels.
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             if self.poisoned:
                 return
             def poison_queue(queue):
@@ -495,8 +486,7 @@ class Alternative:
         return self.priSelect()
     
     def priSelect(self):
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             # First, enable guards. 
             self.state = self._ALT_ENABLING
             g, ret = self._enableGuards()
@@ -549,8 +539,7 @@ class SChannel:
         self.wq = []
 
     def write(self, val):
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             if len(self.rq) == 0:
                 ## nobody waiting for read
                 self.wq.append([c, val])
@@ -561,8 +550,7 @@ class SChannel:
             r[0].set_result(val)
 
     def read(self):
-        c = _globalLock.get_cfuture()
-        with c:
+        with CFuture() as c: 
             if len(self.wq) == 0:
                 ## nobody waiting to write to us
                 self.rq.append([c])
