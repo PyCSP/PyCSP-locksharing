@@ -98,13 +98,15 @@ def Spawn(process):
 class CFuture:
     """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
     management of a Monitor (implemented using a Condition variable).
-    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future. 
+    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
+    thread like in a normal condition variable.
     """
-    # TODO: should consider implementing the wait and set_reult bit directly instead of using a condition variable. 
-    _global_lock = threading.RLock() # shared lock
+    # TODO: should consider implementing the wait, set_reult and context manager bit directly instead of using a condition variable.
+    # It will add complexity though. 
+    _lock = threading.RLock() # shared lock
 
     def __init__(self):
-        self.cond = threading.Condition(self._global_lock)
+        self.cond = threading.Condition(self._lock)
         self.result = None
 
     def wait(self):
