@@ -95,7 +95,7 @@ def Spawn(process):
 
 #############################################################
 # 
-class CFuture:
+class CFuture1:
     """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
     management of a Monitor (implemented using a Condition variable).
     Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
@@ -126,7 +126,13 @@ class CFuture:
         # Condition: return self._lock.__exit__(*args)
         return self.cond.__exit__(*args)
 
+if 0:
+    CFuture = CFuture1
+else:
+    print("Using simplified CFuture")
+    from .cfut_tst import CFuture as CFuture
 
+    
 # ******************** Base and simple guards (channel ends should inherit from a Guard) ********************
 #
 
