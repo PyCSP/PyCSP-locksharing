@@ -24,9 +24,14 @@ import sys
 # We're making a confusing context manager/monitor. 
 
 class CFuture:
+    _global_lock = RLock()  # lock shared by all CFutures
+    
     def __init__(self, lock=None):
         if lock is None:
-            lock = RLock()
+            # threading.Condition creates a local lock for that condition variable
+            #lock = RLock()     
+            # For the use in PyCSP, we need to use a global lock unless we require all to specify a shared lock. 
+            lock = self._global_lock 
         self._lock = lock
         self._is_owned = lock._is_owned
         self._waiter = None # we only support one waiter. 

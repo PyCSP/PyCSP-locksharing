@@ -102,7 +102,7 @@ class CFuture1:
     Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
     thread like in a normal condition variable.
     """
-    # TODO: should consider implementing the wait, set_reult and context manager bit directly instead of using a condition variable.
+    # TODO: should consider implementing the wait, set_reult and context manager a bit directly instead of using a condition variable.
     # It will add complexity though. 
     _lock = threading.RLock() # shared lock
 
