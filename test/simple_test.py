@@ -1,5 +1,14 @@
+#!/usr/bin/env python3
+
 #############################################################
         
+from common import *
+from pycsp import *
+from pycsp.plugNplay import *
+import os
+import time
+import pycsp
+
 
 
 def schan_test():
