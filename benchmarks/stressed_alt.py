@@ -38,18 +38,17 @@ def stressed_reader(channels, writers_per_chan):
     print(f"Total writer procs : {writers_per_chan * len(channels)}")
     alt = Alternative(*[ch.read for ch in channels])
 
-    if 1:
-        print("Select using async with : ")
-        for run in range(N_RUNS):
-            t1 = time.time()
-            for i in range(N_SELECTS):
-                with alt as (g, val):
-                    # the selected read is already executed...
-                    pass
-            t2 = time.time()
-            dt = t2-t1
-            us_per_select = 1_000_000 * dt / N_SELECTS
-            print(f"Run {run:2}, {N_SELECTS} iters, {us_per_select} us per select/iter")
+    print("Select using async with : ")
+    for run in range(N_RUNS):
+        t1 = time.time()
+        for i in range(N_SELECTS):
+            with alt as (g, val):
+                # the selected read is already executed...
+                pass
+        t2 = time.time()
+        dt = t2-t1
+        us_per_select = 1_000_000 * dt / N_SELECTS
+        print(f"Run {run:2}, {N_SELECTS} iters, {us_per_select} us per select/iter")
 
     print("Select using alt.select() : ")
     for run in range(N_RUNS):
