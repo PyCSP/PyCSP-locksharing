@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Temp implementation of CFuture. 
+Implementation of CFuture. 
 """
 
 import _thread
@@ -10,6 +10,42 @@ _start_new_thread = _thread.start_new_thread
 _allocate_lock = _thread.allocate_lock
 RLock = _thread.RLock
 import sys
+
+
+#############################################################
+# 
+class CFuture1:
+    """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
+    management of a Monitor (implemented using a Condition variable).
+    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
+    thread like in a normal condition variable.
+    """
+    # TODO: should consider implementing the wait, set_reult and context manager a bit directly instead of using a condition variable.
+    # It will add complexity though. 
+    _lock = threading.RLock() # shared lock
+
+    def __init__(self):
+        self.cond = threading.Condition(self._lock)
+        self.result = None
+
+    def wait(self):
+        self.cond.wait()
+        return self.result
+
+    def set_result(self, res):
+        self.result = res
+        self.cond.notify()
+
+    # context manager. 
+    def __enter__(self):
+        # Condition: return self._lock.__enter__()
+        self.cond.__enter__()
+        return self
+    def __exit__(self, *args):
+        # Condition: return self._lock.__exit__(*args)
+        return self.cond.__exit__(*args)
+
+
 
 # An alternative way of doing this: 
 # with CFuture(....) as c:
@@ -24,6 +60,11 @@ import sys
 # We're making a confusing context manager/monitor. 
 
 class CFuture:
+    """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
+    management of a Monitor (implemented using a Condition variable).
+    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
+    thread like in a normal condition variable.
+    """
     _global_lock = RLock()  # lock shared by all CFutures
     
     def __init__(self, lock=None):
@@ -75,6 +116,14 @@ class CFuture:
         # args are usually None (no exceptions etc)
         # Return True to suppress execptions. 
         return False
+
+    
+if 0:
+    CFuture_new = CFuture
+    CFuture = CFuture1
+else:
+    print("Using simplified CFuture")
+
 
 if __name__ == "__main__":
     import traceback

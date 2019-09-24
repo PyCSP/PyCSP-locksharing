@@ -13,7 +13,7 @@ import random
 import collections
 import functools
 import itertools
-
+from .cfutures import CFuture
 
 # ******************** Core code ********************
 
@@ -92,46 +92,6 @@ def Spawn(process):
     process.start()
     return process
 
-
-
-#############################################################
-# 
-class CFuture1:
-    """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock 
-    management of a Monitor (implemented using a Condition variable).
-    Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting 
-    thread like in a normal condition variable.
-    """
-    # TODO: should consider implementing the wait, set_reult and context manager a bit directly instead of using a condition variable.
-    # It will add complexity though. 
-    _lock = threading.RLock() # shared lock
-
-    def __init__(self):
-        self.cond = threading.Condition(self._lock)
-        self.result = None
-
-    def wait(self):
-        self.cond.wait()
-        return self.result
-
-    def set_result(self, res):
-        self.result = res
-        self.cond.notify()
-
-    # context manager. 
-    def __enter__(self):
-        # Condition: return self._lock.__enter__()
-        self.cond.__enter__()
-        return self
-    def __exit__(self, *args):
-        # Condition: return self._lock.__exit__(*args)
-        return self.cond.__exit__(*args)
-
-if 0:
-    CFuture = CFuture1
-else:
-    print("Using simplified CFuture")
-    from .cfut_tst import CFuture as CFuture
 
     
 # ******************** Base and simple guards (channel ends should inherit from a Guard) ********************
