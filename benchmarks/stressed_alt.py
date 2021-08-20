@@ -4,9 +4,10 @@
 # https://github.com/kevin-chalmers/cpp-csp/blob/master/demos/stressedalt.cpp
 # https://www.researchgate.net/publication/315053019_Development_and_Evaluation_of_a_Modern_CCSP_Library
 
-import common
-from pycsp import process, Alternative, Channel, Parallel
 import time
+import common
+import pycsp
+from pycsp import process, Alternative, Parallel
 
 N_RUNS    = 10
 N_SELECTS = 10000
@@ -16,6 +17,7 @@ N_PROCS_PER_CHAN = 100
 
 print("--------------------- Stressed Alt --------------------")
 common.handle_common_args()
+Channel = pycsp.Channel    # in case command line arguments replaced the Channel def
 
 
 @process

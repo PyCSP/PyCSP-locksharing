@@ -6,9 +6,12 @@ import time
 import random
 import itertools
 from common import handle_common_args
-from pycsp import process, Channel, Alternative, Parallel
+import pycsp
+from pycsp import process, Alternative, Parallel
 
 handle_common_args()
+Channel = pycsp.Channel    # in case channel was replaced by command line options
+
 
 def schan_test():
     print("************************************************************")

@@ -4,9 +4,12 @@
 Copyright (c) 2018 John Markus Bjørndalen, jmb@cs.uit.no.
 See LICENSE.txt for licensing details (MIT License).
 """
-from common import avg
 import time
-from pycsp import Channel, process, Parallel
+from common import avg, handle_common_args
+import pycsp
+from pycsp import process, Parallel
+
+handle_common_args()
 
 
 @process
@@ -50,7 +53,7 @@ def reader_timed(N, cin):
 
 
 N = 10
-c = Channel('a')
+c = pycsp.Channel('a')
 Parallel(writer(N, c.write),
          reader_verb(N, c.read))
 
