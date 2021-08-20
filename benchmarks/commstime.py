@@ -12,15 +12,16 @@
 
 """
 
-from common import *
-from pycsp import *
-from pycsp.plugNplay import *
 import os
 import time
+from common import handle_common_args
 import pycsp
+from pycsp import process, Channel, Parallel
+from pycsp.plugNplay import Prefix, Delta2, Successor
 
 print("--------------------- Commstime --------------------")
 handle_common_args()
+
 
 @process
 def consumer(cin, run_no):
@@ -33,13 +34,14 @@ def consumer(cin, run_no):
     for i in range(N):
         cin()
     t2 = ts()
-    dt = t2-t1
+    dt = t2 - t1
     tchan = dt / (4 * N)
-    print("Run %d DT = %f.  Time per ch : %f/(4*%d) = %f s = %f us" % \
+    print("Run %d DT = %f.  Time per ch : %f/(4*%d) = %f s = %f us" %
           (run_no, dt, dt, N, tchan, tchan * 1000000))
-    #print("consumer done, posioning channel")
+    # print("consumer done, posioning channel")
     cin.poison()
     return tchan
+
 
 def CommsTimeBM(run_no, Delta2=Delta2):
     # Create channels
@@ -48,11 +50,12 @@ def CommsTimeBM(run_no, Delta2=Delta2):
     c = Channel("c")
     d = Channel("d")
 
-    rets = Parallel(Prefix(c.read, a.write, prefixItem = 0),  # initiator
-                    Delta2(a.read, b.write, d.write),         # forwarding to two
-                    Successor(b.read, c.write),               # feeding back to prefix
-                    consumer(d.read, run_no))                 # timing process
+    rets = Parallel(Prefix(c.read, a.write, prefixItem=0),  # initiator
+                    Delta2(a.read, b.write, d.write),       # forwarding to two
+                    Successor(b.read, c.write),             # feeding back to prefix
+                    consumer(d.read, run_no))               # timing process
     return rets[-1]
+
 
 def run_bm(Delta2=pycsp.plugNplay.Delta2):
     print(f"Running with Delta2 = {Delta2}")
@@ -61,8 +64,9 @@ def run_bm(Delta2=pycsp.plugNplay.Delta2):
     for i in range(N_BM):
         tchans.append(CommsTimeBM(i, Delta2))
     print("Min {:7.3f}  Avg {:7.3f} Max {:7.3f}".format(1_000_000 * min(tchans),
-                                                        1_000_000 * sum(tchans)/len(tchans), 
+                                                        1_000_000 * sum(tchans) / len(tchans),
                                                         1_000_000 * max(tchans)))
+
 
 run_bm(pycsp.plugNplay.ParDelta2)
 run_bm(pycsp.plugNplay.SeqDelta2)
@@ -72,6 +76,7 @@ try:
 except:
     print("Sleeping for a while to allow windows users to read benchmark results")
     time.sleep(15)
+
 
 def run_cprofile():
     import cProfile

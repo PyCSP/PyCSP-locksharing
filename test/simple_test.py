@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 
-#############################################################
-        
-from common import *
-from pycsp import *
-from pycsp.plugNplay import *
-import os
+# ############################################################
+
 import time
-import pycsp
+import random
+import itertools
+from common import handle_common_args
+from pycsp import process, Channel, Alternative, Parallel
 
-
+handle_common_args()
 
 def schan_test():
     print("************************************************************")
     print("Simple channel test")
-    @process        
+
+    @process
     def writer(p, ch):
         pref = " " * p * 2
         for i in range(10):
-            val = (p,i)
+            val = (p, i)
             print(f"{pref} W {p} -> {val}")
             ch.write(val)
             print(f"{pref} W {p} done")
-            time.sleep(random.random()*3 + 2)
+            time.sleep(random.random() * 3 + 2)
+
     @process
     def reader(p, ch):
         pref = "                     " + " " * p * 2
@@ -31,7 +32,8 @@ def schan_test():
             print(f"{pref} R {p} waiting")
             val = ch.read()
             print(f"{pref} R {p} got {val}")
-            time.sleep(random.random()*3 + 2)
+            time.sleep(random.random() * 3 + 2)
+
     ch = Channel()
     Parallel(writer(1, ch),
              reader(1, ch),
@@ -52,10 +54,10 @@ def sguard_test():
             print(f"{pref} W {p} -> {val}")
             cout(val)
             print(f"{pref} W {p} write done")
-            time.sleep(random.random()*3+2)
-        print(f"{pref} W {p} finishing")            
-        #cout.poison()
-        
+            time.sleep(random.random() * 3 + 2)
+        print(f"{pref} W {p} finishing")
+        # cout.poison()
+
     @process
     def reader(p, cin):
         pref = " " * p * 2
@@ -70,7 +72,7 @@ def sguard_test():
         alt = Alternative(cin)
         for i in itertools.count():
             if i == 10:
-                break # TODO poison doesn't work for alt.select yet
+                break   # TODO poison doesn't work for alt.select yet
             print(f"{pref} AR  {p} waiting")
             with alt as (g, val):
                 print(f"{pref} AR  {p} got {val} from {g}")
@@ -83,12 +85,11 @@ def sguard_test():
             print(f"{pref} AW {p} -> {val}")
             g = cout.alt_pending_write(val)
             alt = Alternative(g)
-            ret = alt.select()
+            alt.select()
             print(f"{pref} AW {p} done")
-            time.sleep(random.random()*3+2)
-        print(f"{pref} AW {p} finishing")            
-        #cout.poison()
-
+            time.sleep(random.random() * 3 + 2)
+        print(f"{pref} AW {p} finishing")
+        # cout.poison()
 
     ch = Channel()
     Parallel(
@@ -101,6 +102,5 @@ def sguard_test():
     print("All done")
 
 
-    
-#schan_test()
+# schan_test()
 sguard_test()

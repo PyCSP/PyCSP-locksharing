@@ -5,8 +5,7 @@
 # https://www.researchgate.net/publication/315053019_Development_and_Evaluation_of_a_Modern_CCSP_Library
 
 import common
-import pycsp
-from pycsp import *
+from pycsp import process, Alternative, Channel, Parallel
 import time
 
 N_RUNS    = 10
@@ -18,14 +17,12 @@ N_PROCS_PER_CHAN = 100
 print("--------------------- Stressed Alt --------------------")
 common.handle_common_args()
 
+
 @process
 def stressed_writer(cout, writer_id):
     "Stressed alt writer"
-    i = 0
     while True:
-        #cout((writer_id, i))
         cout(writer_id)
-        #i += 1
 
 
 @process
@@ -46,7 +43,7 @@ def stressed_reader(channels, writers_per_chan):
                 # the selected read is already executed...
                 pass
         t2 = time.time()
-        dt = t2-t1
+        dt = t2 - t1
         us_per_select = 1_000_000 * dt / N_SELECTS
         print(f"Run {run:2}, {N_SELECTS} iters, {us_per_select} us per select/iter")
 
@@ -54,17 +51,16 @@ def stressed_reader(channels, writers_per_chan):
     for run in range(N_RUNS):
         t1 = time.time()
         for i in range(N_SELECTS):
-            #print(i)
-            g, val = alt.select() 
+            g, val = alt.select()
         t2 = time.time()
-        dt = t2-t1
+        dt = t2 - t1
         us_per_select = 1_000_000 * dt / N_SELECTS
         print(f"Run {run:2}, {N_SELECTS} iters, {us_per_select} us per select/iter")
-        
+
     for ch in channels:
         ch.poison()
 
-        
+
 def run_bm():
     chans = [Channel(f'ch {i}') for i in range(N_CHANNELS)]
     procs = []
@@ -77,4 +73,3 @@ def run_bm():
 
 
 run_bm()
-
