@@ -7,7 +7,7 @@ import argparse
 # Trick to import pycsp without setting PYTHONPATH
 import sys
 sys.path.append("..")
-import common_exp
+import common_exp    # noqa E402  -- path must be up to date before importing this one
 
 # Common arguments are added and handled here. The general outline for a program is to
 # use common.handle_common_args() with a list of argument specs to add.
@@ -16,6 +16,8 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument("-rw_deco", help='use decorators for read/write ops on channels', action='store_const', const=True, default=False)
 argparser.add_argument("-rw_ctxt", help='use context manager for read/write ops on channels', action='store_const', const=True, default=False)
 argparser.add_argument("-rw_ctxt2", help='use context manager in the channel for read/write ops on channels', action='store_const', const=True, default=False)
+# Workaround for pytest and argparse both trying to parse arguments.
+argparser.add_argument("-v", help="hiding pytest's -v argument", action='store_const', const=True, default=False)
 
 
 def handle_common_args(argspecs=[]):

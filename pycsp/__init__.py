@@ -121,30 +121,29 @@ class Skip(Guard):
         return True
 
 
-# TODO: this is the asyncio version. Need a timer solution that works with CFutures and can be canceled.
+# TODO: this is based on the classic version, should be checked for correctness
 class Timer(Guard):
     def __init__(self, seconds):
         self.expired = False
-        # TODO: to make it more general, allow 'alt' to be an op code queue? It wouldn't quite fit as enable() starts
-        # the timer, so we'd need a timer per queued opcode in that case.
-        self.alt = None
         self.seconds = seconds
-        self.cb = None
+        self.alt = None
 
     def enable(self, alt):
         self.alt = alt
-        self.cb = asyncio.call_later(self.seconds, self.expire)
+        # Need to create the thread/timer here since a threading.Timer cannot be reused.
+        self.timer = threading.Timer(self.seconds, self.expire)
+        self.timer.start()
         return (False, None)
 
     def disable(self, alt):
-        # TODO: is cb.cancel() enough to make sure expire is not called after this?
-        # TODO: should add a state flag to make sure we don't try to run alt.schedule after it's canceled.
-        self.cb.cancel()
+        # print("Cancel", self.seconds)
+        self.timer.cancel()
         self.alt = None
 
-    async def expire(self):
+    def expire(self):
         self.expired = True
-        self.alt.schedule(self)
+        with CFuture():
+            self.alt.schedule(self, 0)
 
 
 # ******************** Channels ********************

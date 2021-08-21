@@ -25,7 +25,7 @@ def schan_test():
             print(f"{pref} W {p} -> {val}")
             ch.write(val)
             print(f"{pref} W {p} done")
-            time.sleep(random.random() * 3 + 2)
+            time.sleep(random.random() * 0.5 + 0.5)
 
     @process
     def reader(p, ch):
@@ -35,7 +35,7 @@ def schan_test():
             print(f"{pref} R {p} waiting")
             val = ch.read()
             print(f"{pref} R {p} got {val}")
-            time.sleep(random.random() * 3 + 2)
+            time.sleep(random.random() * 0.5 + 0.5)
 
     ch = Channel()
     Parallel(writer(1, ch),
@@ -57,7 +57,7 @@ def sguard_test():
             print(f"{pref} W {p} -> {val}")
             cout(val)
             print(f"{pref} W {p} write done")
-            time.sleep(random.random() * 3 + 2)
+            time.sleep(random.random() * 0.5 + 0.5)
         print(f"{pref} W {p} finishing")
         # cout.poison()
 
@@ -90,7 +90,7 @@ def sguard_test():
             alt = Alternative(g)
             alt.select()
             print(f"{pref} AW {p} done")
-            time.sleep(random.random() * 3 + 2)
+            time.sleep(random.random() * 0.5 + 0.5)
         print(f"{pref} AW {p} finishing")
         # cout.poison()
 
@@ -105,5 +105,5 @@ def sguard_test():
     print("All done")
 
 
-# schan_test()
+schan_test()
 sguard_test()
