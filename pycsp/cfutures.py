@@ -4,7 +4,6 @@
 Implementation of CFuture.
 """
 
-import sys
 import _thread
 import threading
 _start_new_thread = _thread.start_new_thread

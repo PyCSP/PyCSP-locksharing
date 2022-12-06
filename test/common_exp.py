@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-# import sys
-# sys.path.append("..")
-# import common
 import pycsp
 from pycsp import chan_poisoncheck, _ChanOP, ChannelPoisonException, CFuture
 
@@ -29,21 +26,10 @@ class Channel_W_DecoratorOps(pycsp.Channel):
         super().__init__(name)
         # print("decorator chan (poisoncheck)")
 
+    # Note is from aPyCSP
     # TODO: adding this decorator adds about 0.7 microseconds to the op time _and_ it adds memory usage for
     # processes waiting on a channel (call/await/future stack)... (5092 vs 4179 bytes per proc in n_procs.py)
     # Can we improve it?
-    @chan_poisoncheck
-    def _read(self):
-        with CFuture() as c:
-            rcmd = _ChanOP('read', None)
-            if len(self.rqueue) > 0 or len(self.wqueue) == 0:
-                # readers ahead of us, or no writiers
-                self._queue_waiting_op(self.rqueue, rcmd, c)
-                return c.wait()
-            # find matching write cmd.
-            wcmd = self.wqueue.popleft()
-            return self._rw_nowait(wcmd, rcmd)[1]
-
     @chan_poisoncheck
     def _write(self, obj):
         with CFuture() as c:
@@ -58,6 +44,18 @@ class Channel_W_DecoratorOps(pycsp.Channel):
             # find matching read cmd.
             rcmd = self.rqueue.popleft()
             return self._rw_nowait(wcmd, rcmd)[0]
+
+    @chan_poisoncheck
+    def _read(self):
+        with CFuture() as c:
+            rcmd = _ChanOP('read', None)
+            if len(self.rqueue) > 0 or len(self.wqueue) == 0:
+                # readers ahead of us, or no writiers
+                self._queue_waiting_op(self.rqueue, rcmd, c)
+                return c.wait()
+            # find matching write cmd.
+            wcmd = self.wqueue.popleft()
+            return self._rw_nowait(wcmd, rcmd)[1]
 
 
 def set_channel_rw_decorator():
@@ -94,6 +92,17 @@ class Channel_W_ContextMgrOps(pycsp.Channel):
         # print("decorator chan (ctxt poisoncheck)")
 
     # using context managers
+    def _write(self, obj):
+        with CFuture() as c:
+            with self.poisoncheck:
+                wcmd = _ChanOP('write', obj)
+                if len(self.wqueue) > 0 or len(self.rqueue) == 0:
+                    self._queue_waiting_op(self.wqueue, wcmd, c)
+                    return c.wait()
+                # find matching read cmd.
+                rcmd = self.rqueue.popleft()
+                return self._rw_nowait(wcmd, rcmd)[0]
+
     def _read(self):
         with CFuture() as c:
             with self.poisoncheck:
@@ -105,21 +114,6 @@ class Channel_W_ContextMgrOps(pycsp.Channel):
                 # find matching write cmd.
                 wcmd = self.wqueue.popleft()
                 return self._rw_nowait(wcmd, rcmd)[1]
-
-    def _write(self, obj):
-        with CFuture() as c:
-            with self.poisoncheck:
-                wcmd = _ChanOP('write', obj)
-                if len(self.wqueue) > 0 or len(self.rqueue) == 0:
-                    # a) somebody else is already waiting to write, so we're not going to
-                    #    change the situation any with this write. simply append ourselves and wait
-                    #    for somebody to wake us up with the result.
-                    # b) nobody is waiting for our write. (TODO: buffered channels)
-                    self._queue_waiting_op(self.wqueue, wcmd, c)
-                    return c.wait()
-                # find matching read cmd.
-                rcmd = self.rqueue.popleft()
-                return self._rw_nowait(wcmd, rcmd)[0]
 
 
 def set_channel_contextmgr():
@@ -139,7 +133,17 @@ class Channel_W_ContextMgrOps2(pycsp.Channel):
         # print("decorator chan (ctxt2 poisoncheck)")
 
     # using context managers
-    # using context managers
+    def _write(self, obj):
+        with CFuture() as c:
+            with self:
+                wcmd = _ChanOP('write', obj)
+                if len(self.wqueue) > 0 or len(self.rqueue) == 0:
+                    self._queue_waiting_op(self.wqueue, wcmd, c)
+                    return c.wait()
+                # find matching read cmd.
+                rcmd = self.rqueue.popleft()
+                return self._rw_nowait(wcmd, rcmd)[0]
+
     def _read(self):
         with CFuture() as c:
             with self:
@@ -151,21 +155,6 @@ class Channel_W_ContextMgrOps2(pycsp.Channel):
                 # find matching write cmd.
                 wcmd = self.wqueue.popleft()
                 return self._rw_nowait(wcmd, rcmd)[1]
-
-    def _write(self, obj):
-        with CFuture() as c:
-            with self:
-                wcmd = _ChanOP('write', obj)
-                if len(self.wqueue) > 0 or len(self.rqueue) == 0:
-                    # a) somebody else is already waiting to write, so we're not going to
-                    #    change the situation any with this write. simply append ourselves and wait
-                    #    for somebody to wake us up with the result.
-                    # b) nobody is waiting for our write. (TODO: buffered channels)
-                    self._queue_waiting_op(self.wqueue, wcmd, c)
-                    return c.wait()
-                # find matching read cmd.
-                rcmd = self.rqueue.popleft()
-                return self._rw_nowait(wcmd, rcmd)[0]
 
     # context manager for the channel checks for poison
     def __enter__(self):

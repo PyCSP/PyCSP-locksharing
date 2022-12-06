@@ -2,9 +2,6 @@
 
 # ############################################################
 
-import time
-import random
-import itertools
 from common import handle_common_args
 import pycsp
 from pycsp import process, Alternative, Sequence
@@ -34,9 +31,10 @@ def test_timer():
     ch = Channel()
     Sequence(timeout_reader(1, ch))
 
+
 # TODO:
 # - no way of checking for deadlocks (like in go).
-# - alternative is to use some kind of timeout (just use an alt with timeout to wayt for a test?) 
+# - alternative is to use some kind of timeout (just use an alt with timeout to wayt for a test?)
 # - the above doesn't work. Old timers will be disabled?  I get disable on 0.25 and 1.0 sec timers.
 # - pytest and argparser don't work well together.
 

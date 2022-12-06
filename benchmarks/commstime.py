@@ -74,8 +74,8 @@ run_bm(pycsp.plugNplay.SeqDelta2)
 # A bit of a hack, but windows does not have uname()
 try:
     os.uname()
-except:
-    print("Sleeping for a while to allow windows users to read benchmark results")
+except AttributeError:
+    print("Sleeping for a while to allow MS Windows users to read benchmark results")
     time.sleep(15)
 
 

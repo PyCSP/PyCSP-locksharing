@@ -42,8 +42,6 @@ def ParDelta2(cin, cout1, cout2):
         ch(val)
 
     for t in cin:
-        # NB: cout1(t) generates a coroutine, which is equivalent with a CSP process.
-        # This is therefore safe to do.
         Parallel(
             writer(cout1, t),
             writer(cout2, t),

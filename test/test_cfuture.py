@@ -5,7 +5,7 @@ import traceback
 import time
 import threading
 from threading import RLock
-import common
+import common    # noqa E402
 from pycsp.cfutures import CFuture
 
 

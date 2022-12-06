@@ -13,7 +13,6 @@ N_RUNS    = 10
 N_SELECTS = 10000
 N_CHANNELS = 10
 N_PROCS_PER_CHAN = 1000
-N_PROCS_PER_CHAN = 100
 
 print("--------------------- Stressed Alt --------------------")
 common.handle_common_args()
@@ -21,17 +20,19 @@ Channel = pycsp.Channel    # in case command line arguments replaced the Channel
 
 
 @process
-def stressed_writer(cout, writer_id):
+def stressed_writer(cout, ready, writer_id):
     "Stressed alt writer"
+    ready(42)
     while True:
         cout(writer_id)
 
 
 @process
-def stressed_reader(channels, writers_per_chan):
-    print("Waiting 5 seconds for all writers to get going")
-    time.sleep(5)
-    print("- sleep done, reader ready")
+def stressed_reader(channels, ready, n_writers, writers_per_chan):
+    print("Waiting for all writers to get going")
+    for _ in range(n_writers):
+        ready()
+    print("- writers ready, reader almost ready")
 
     print(f"Setting up alt with {writers_per_chan} procs per channel and {len(channels)} channels.")
     print(f"Total writer procs : {writers_per_chan * len(channels)}")
@@ -40,9 +41,9 @@ def stressed_reader(channels, writers_per_chan):
     print("Select using async with : ")
     for run in range(N_RUNS):
         t1 = time.time()
-        for i in range(N_SELECTS):
-            with alt as (g, val):
-                # the selected read is already executed...
+        for _ in range(N_SELECTS):
+            with alt as (_, _):
+                # The selected read operation is already executed. No need to do more.
                 pass
         t2 = time.time()
         dt = t2 - t1
@@ -52,8 +53,8 @@ def stressed_reader(channels, writers_per_chan):
     print("Select using alt.select() : ")
     for run in range(N_RUNS):
         t1 = time.time()
-        for i in range(N_SELECTS):
-            g, val = alt.select()
+        for _ in range(N_SELECTS):
+            alt.select()
         t2 = time.time()
         dt = t2 - t1
         us_per_select = 1_000_000 * dt / N_SELECTS
@@ -64,13 +65,14 @@ def stressed_reader(channels, writers_per_chan):
 
 
 def run_bm():
+    ready = Channel("ready")
     chans = [Channel(f'ch {i}') for i in range(N_CHANNELS)]
     procs = []
     for cno, ch in enumerate(chans):
         for c_pid in range(N_PROCS_PER_CHAN):
             writer_id = (cno, c_pid)
-            procs.append(stressed_writer(ch.write, writer_id))
-    procs.append(stressed_reader(chans, N_PROCS_PER_CHAN))
+            procs.append(stressed_writer(ch.write, ready.write, writer_id))
+    procs.append(stressed_reader(chans, ready.read, N_CHANNELS * N_PROCS_PER_CHAN, N_PROCS_PER_CHAN))
     Parallel(*procs)
 
 

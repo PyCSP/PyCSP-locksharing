@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Experimental implementation of PyCSP using custom Futures that share a global lock for communication, ALT and guards.
+Multithreaded implementation of PyCSP using custom Futures that share a global lock for communication, ALT and guards.
 
 /usr/lib/python3.6/concurrent/futures/_base.py has the implementation for thread based futures.
 These use an internal (non-shared) lock, and you can't specify a lock you want to use.
-
+This inspired the creation of CFutures (see separate file for implementation).
 """
 
 import threading
@@ -130,7 +130,7 @@ class Timer(Guard):
 
     def enable(self, alt):
         self.alt = alt
-        # Need to create the thread/timer here since a threading.Timer cannot be reused.
+        # Need to create a new thread/timer here since a threading.Timer cannot be reused.
         self.timer = threading.Timer(self.seconds, self.expire)
         self.timer.start()
         return (False, None)
@@ -343,6 +343,8 @@ class Channel:
                     if op.fut:
                         op.fut.set_result(None)
 
+            if self.poisoned:
+                return
             self.poisoned = True
             poison_queue(self.wqueue)
             poison_queue(self.rqueue)
@@ -361,7 +363,7 @@ class Channel:
         # TODO: one option _could_ be to use an ordered dict (new dicts are ordered as well), but we would need to
         # have a unique key that can be used to cancel commands later (and remove the first entry when popping)
         # collections.OrderedDict() has a popitem() method.
-        return collections.deque(filter(lambda op: not(op.cmd == 'ALT' and op.alt == alt), queue))
+        return collections.deque(filter(lambda op: not (op.cmd == 'ALT' and op.alt == alt), queue))
 
     # TODO: read and write alts needs poison check, but we need de-register guards properly before we
     # consider throwing an exception.
@@ -404,7 +406,7 @@ class Channel:
         """Removes the ALT from the writer queue."""
         self.wqueue = self._remove_alt_from_pqueue(self.wqueue, alt)
 
-    # Support async for channel:
+    # Support iteration over channel to read from it:
     def __iter__(self):
         return self
 
@@ -532,6 +534,16 @@ class Alternative:
         """A wake-up call to processes ALTing on guards controlled by this object.
         Called by the (self) selected guard."""
         if self.state != self._ALT_WAITING:
+            # So far, this has only occurred with a single process that tries to alt on both the read and write end
+            # of the same channel. In that case, the first guard is enabled but has to wait, and the second
+            # guard matches up with the first guard. They are both in the same ALT which is now in an enabling phase.
+            # If a wguard enter first, the rguard will remove the wguard (flagged as an ALT), match it with the
+            # read (flagged as RD). rw_nowait will try to run schedule() on the wguard's ALT (the same ALT as the rguard's ALT)
+            # which is still in the enabling phase.
+            # We could get around this by checking if both ends reference the same ALT, but it would be more complicated code,
+            # and (apart from rendesvouz with yourself) the semantics of reading and writing from the channel
+            # is confusing. You could end up writing without observing the result (the read has, strictly speaking,
+            # completed though).
             msg = f"Error: running schedule on an ALT that was in state {self.state} instead of waiting."
             raise Exception(msg)
         # NB: It should be safe to set_result as long as we don't yield in it.
