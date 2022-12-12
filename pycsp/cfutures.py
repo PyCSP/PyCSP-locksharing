@@ -20,7 +20,6 @@ class CFuture1:
     thread like in a normal condition variable.
     """
     # TODO: should consider implementing the wait, set_reult and context manager a bit directly instead of using a condition variable.
-    # It will add complexity though.
     _lock = threading.RLock()  # shared lock
 
     def __init__(self):
@@ -46,23 +45,20 @@ class CFuture1:
         return self.cond.__exit__(*args)
 
 
-# An alternative way of doing this:
-# with CFuture(....) as c:
-#      return c.wait()
-# the __exit__ in c will do the actual waiting...
-# the problem here is getting access to the return value from return and modifying that.
-#
-# The problem with releasing the condition afterwards is that I have a few
-# locations in priSelect() where the state of the ALT is modified.
-# The other is that it's not clear (unless you read the documentation of wait() that you no longer
-# have the lock of the CF after returning from wait).
-# We're making a confusing context manager/monitor.
-
 class CFuture:
     """The CFuture combines the wait-for-result and send-result mechanisms of a Future with the shared lock
     management of a Monitor (implemented using a Condition variable).
     Instead of transferring control, as in a Hoare monitor, we transfer state like in a Future and release the waiting
     thread like in a normal condition variable.
+
+    Instead of using a condition variable, this version of the CFuture uses some of the same tricks that the
+    Condition variable in the threading library uses.
+    It reduces some overhead, however, as it doesn't have to re-acquire the shared lock to get back into the monitor.
+    Instead, the semantics of the wait() is that the caller has released the shared lock when returning and
+    the result is stored in the future.
+
+    In a simple producer-consumer benchmark the overhead of using a condition variable to implement a CFuture is
+    50% higher (on the whole benchmark) than using this version of the CFuture.
     """
     _global_lock = RLock()  # lock shared by all CFutures
 
@@ -86,14 +82,15 @@ class CFuture:
         """NB: Once you return, you no longer have the lock!"""
         if not self._is_owned():
             raise RuntimeError("cannot wait on un-acquired lock")
+        # Create a lock that this thread can sleep on while waiting for somebody else to notify.
         waiter = _allocate_lock()
         waiter.acquire()
         self._waiter = waiter
-        # TODO: what happens if somebody release waiter before we acquire the second time?
-        # it _should_ only let us continue immediately
+        # Relase the shared lock to let others do things inside the pycsp library.
         self._lock.release()
-        # Another lock will block us until somebody releases us
         self.waited = True
+        # This will block this thread/method until somebody releases the lock, or continue immediately if
+        # another thread managed to release/notify() before this call to acquire.
         waiter.acquire()
         return self.result
 
@@ -108,11 +105,11 @@ class CFuture:
         return self
 
     def __exit__(self, *args):
-        # TODO: should check if we actually have it.
+        # If self.wait() was called, this CFuture no longer has the shared lock.
+        # TODO: should check if we actually have the shared lock.
         if not self.waited:
+            # Only release if wait() was never called, so the shared lock has to be released.
             self._lock.release()
-        # nb: if we have called self.wait, we no longer have the lock.
-        # This is an ugly way of doing this.
         # args are usually None (no exceptions etc)
         # Return True to suppress execptions.
         return False
@@ -121,5 +118,4 @@ class CFuture:
 if 0:
     CFuture_new = CFuture
     CFuture = CFuture1
-else:
-    print("Using simplified CFuture")
+    print("Using old CFuture")

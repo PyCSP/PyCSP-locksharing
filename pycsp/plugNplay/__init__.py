@@ -71,5 +71,5 @@ def SkipProcess():
 def Mux2(cin1, cin2, cout):
     alt = Alternative(cin1, cin2)
     while True:
-        ch, val = alt.priSelect()
+        _, val = alt.priSelect()
         cout(val)
