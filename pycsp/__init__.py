@@ -115,12 +115,16 @@ class Guard:
 class Skip(Guard):
     # Based on JCSPSRC/src/com/quickstone/jcsp/lang/Skip.java
     def enable(self, alt):
-        return (True, None)  # Thread.yield() in java version
+        # Thread.yield() in java version
+        return (True, None)
 
     def disable(self, alt):
         return True
 
 
+# The following discussion may turn into a more generic advice for creating guards that respond to
+# other events than channels.
+#
 # Older versions of the thread based Timer guard had two potential race conditions :
 #
 # RC1: threading.Timer threads check whether they are cancelled _before_ running the callback.
@@ -133,7 +137,7 @@ class Skip(Guard):
 #      the lock.
 #      a) It may be unmodified and the callback is correct to run the expire.
 #      b) It may be disabled.
-#      c) It may be enabled again (re-used).
+#      c) It may be disabled and then enabled again (re-used).
 #
 # Running alt.schedule from RC1 or RC2.b and RC2.c could potentially cause problems (RC2.a is,
 # strictly speaking, a the correct behaviour).
@@ -152,9 +156,12 @@ class Skip(Guard):
 # called is sufficient to ensure this. The expire callback can then just check that the mutation number is the
 # same as when the threading.Timer was created/scheduled.
 #
-# O2 should be safe as other guards are only mutated from channel end operations or alt.select().
+# O2 should be safe as guards are only mutated from channel end operations or alt.select().
 # It is, however, something to be aware of when implementing new types of guards.
 #
+# As a side note: the JCSP CSTimer does not handle timing and timeouts directly. Instead, the enable method
+# sets the timeout value in the alt and alt uses a wait with a timeout on the condition variable that protects
+# the core (Java Object.wait). The result is that it avoids this problem entirely.
 class Timer(Guard):
     """Timer that enables a guard after a specified number of seconds.
     """
