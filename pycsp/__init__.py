@@ -95,6 +95,13 @@ class Process(threading.Thread):
 
 # TODO: see test_plugnplay.py for comments. Parallel and Sequence are not composable in the same
 # way they are in aPyCSP.
+# One problem is the interface:
+# - if Parallel returns a process that can be used further up, it will need to expose
+#   start and join methods and also wait for the start to execute while letting the caller
+#   use join to wait for it to finish.
+# - if Parallel is not to be used further up, it cannot easily do the above because
+#   the caller will never call any of the methods and instead expects Parallel to
+#   work like a function call (start and join the processes before returning).
 # pylint: disable-next=C0103
 def Parallel(*processes, check_poison=False):
     """Used to run a set of processes concurrently.
