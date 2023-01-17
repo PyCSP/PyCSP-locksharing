@@ -32,13 +32,13 @@ def consumer(cin, run_no):
     t1 = ts()
     cin()
     t1 = ts()
-    for i in range(N):
+    for _ in range(N):
         cin()
     t2 = ts()
     dt = t2 - t1
     tchan = dt / (4 * N)
-    print("Run %d DT = %f.  Time per ch : %f/(4*%d) = %f s = %f us" %
-          (run_no, dt, dt, N, tchan, tchan * 1000000))
+    tchan_us = tchan * 1_000_000
+    print(f"Run {run_no} DT = {dt:.4f}. Time per ch : {dt:.4f}/(4*{N}) = {tchan:.8f} s = {tchan_us:.4f} us")
     # print("consumer done, posioning channel")
     cin.poison()
     return tchan
@@ -71,6 +71,7 @@ def run_bm(Delta2=pycsp.plugNplay.Delta2):
 
 run_bm(pycsp.plugNplay.ParDelta2)
 run_bm(pycsp.plugNplay.SeqDelta2)
+run_bm(pycsp.plugNplay.AltDelta2)
 # A bit of a hack, but windows does not have uname()
 try:
     os.uname()
