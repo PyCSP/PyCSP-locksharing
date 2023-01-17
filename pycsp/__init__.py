@@ -9,6 +9,7 @@ This inspired the creation of CFutures (see separate file for implementation).
 
 import collections
 import functools
+import types
 from enum import Enum
 import threading
 from .cfutures import CFuture
@@ -24,35 +25,59 @@ def chan_poisoncheck(func):
     "Decorator for making sure that poisoned channels raise ChannelPoinsonException."
     @functools.wraps(func)
     def p_wrap(self, *args, **kwargs):
-        try:
-            if self.poisoned:
-                return None   # Channel poisoned will be raised in finally
-
-            return func(self, *args, **kwargs)
-        finally:
-            if self.poisoned:
-                raise ChannelPoisonException()
+        # Only check for poison on entry.
+        # A poison applied to a channel should only influence any operations that sleep
+        # on the channel or ones that try to submit a new operation _after_ the poison
+        # was applied.
+        # Otherwise there might be a race where a successful read/write lets one of the processes
+        # return from the operation and poison the channel before the other process wakes up.
+        # Sometimes the late process would be poisoned on a successful operation, sometimes
+        # it would not.
+        if self.poisoned:
+            raise ChannelPoisonException()
+        return func(self, *args, **kwargs)
     return p_wrap
 
 
-# ## Copied from thread version (classic)
-def process(func):
-    "Decorator for creating process functions"
-    @functools.wraps(func)
-    def _call(*args, **kwargs):
-        return Process(func, *args, **kwargs)
-    return _call
+def process(verbose_poison=False):
+    """Decorator for creating process functions.
+    Annotates a function as a process and takes care of poison propagation.
+
+    If the optional 'verbose_poison' parameter is true, the decorator will print
+    a message when it captures the ChannelPoisonException after the process
+    was poisoned.
+    """
+    def inner_dec(func):
+        @functools.wraps(func)
+        def proc_wrapped(*args, **kwargs):
+            return Process(func, verbose_poison, *args, **kwargs)
+        return proc_wrapped
+
+    # Decorators with optional arguments are a bit tricky in Python.
+    # 1) If the user did not specify an argument, the first argument will be the function to decorate.
+    # 2) If the user specified an argument, the arguments are to the decorator.
+    # In the first case, retturn a decorated function.
+    # In the second case, return a decorator function that returns a decorated function.
+    if isinstance(verbose_poison, (types.FunctionType, types.MethodType)):
+        # Normal case, need to re-map verbose_poison to the default instead of a function,
+        # or it will evaluate to True
+        func = verbose_poison
+        verbose_poison = False
+        return inner_dec(func)
+    return inner_dec
 
 
 class Process(threading.Thread):
     """PyCSP process container. Arguments are: <function>, *args, **kwargs.
     Checks for and propagates channel poison (see Channels.py)."""
-    def __init__(self, fn, *args, **kwargs):
+    def __init__(self, fn, verbose_poison, *args, **kwargs):
         threading.Thread.__init__(self)
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
         self.poisoned = False
+        self.verbose_poison = verbose_poison
+        self.retval = None
 
     def run(self):
         self.retval = None
@@ -60,16 +85,19 @@ class Process(threading.Thread):
             # Store the returned value from the process
             self.retval = self.fn(*self.args, **self.kwargs)
         except ChannelPoisonException:
-            # print(f"Process {self.fn}({self.args}, {self.kwargs}) caught poison")
+            if self.verbose_poison:
+                print(f"Process poisoned: {self.fn}({self.args=}, {self.kwargs=})")
             self.poisoned = True
             # look for channels and channel ends
-            for ch in [x for x in self.args if isinstance(x, ChannelEnd) or isinstance(x, Channel)]:
+            for ch in [x for x in self.args if isinstance(x, (ChannelEnd, Channel))]:
                 ch.poison()
 
 
+# pylint: disable-next=C0103
 def Parallel(*processes, check_poison=False):
-    """Parallel construct. Takes a list of processes (Python threads) which are started.
-    The Parallel construct returns when all given processes exit.
+    """Used to run a set of processes concurrently.
+    Takes a list of processes which are started.
+    Waits for the processes to complete, and returns a list of return values from each process.
     If check_poison is true, it will raise a ChannelPoison exception if any of the processes have been poisoned.
     """
     # run, then sync with them.
@@ -84,6 +112,7 @@ def Parallel(*processes, check_poison=False):
     return [p.retval for p in processes]
 
 
+# pylint: disable-next=C0103
 def Sequence(*processes):
     """Sequence construct. Takes a list of processes (Python threads) which are started.
     The Sequence construct returns when all given processes exit."""
@@ -94,11 +123,12 @@ def Sequence(*processes):
     return [p.retval for p in processes]
 
 
-def Spawn(process):
+# pylint: disable-next=C0103
+def Spawn(proc):
     """Spawns off and starts a PyCSP process in the background, for
     independent execution. Returns the started process."""
-    process.start()
-    return process
+    proc.start()
+    return proc
 
 
 # ******************** Base and simple guards (channel ends should inherit from a Guard) ********************
@@ -307,6 +337,7 @@ CH_READ = _ChanOpcode.READ
 CH_WRITE = _ChanOpcode.WRITE
 
 
+# pylint: disable-next=R0903
 class _ChanOP:
     """Used to store channel cmd/ops for the op queues."""
     __slots__ = ['cmd', 'obj', 'fut', 'alt', 'wguard']    # reduce some overhead
@@ -316,6 +347,7 @@ class _ChanOP:
         self.obj = obj
         self.fut = None   # Future is used for commands that have to wait
         self.alt = alt    # None if normal read, reference to the ALT if tentative/alt
+        self.wguard = None
 
     def __repr__(self):
         return f"<_ChanOP: {self.cmd}>"
@@ -432,7 +464,7 @@ class Channel:
     def renable(self, alt):
         """enable for the input/read end"""
         if self.poisoned:
-            raise ChannelPoisonException(f"wenable on channel {self} {alt=}")
+            raise ChannelPoisonException(f"renable on channel {self} {alt=}")
         rcmd = _ChanOP(CH_READ, None)
         if (wcmd := self._pop_matching(CH_WRITE)) is not None:
             # Found a match
@@ -506,7 +538,7 @@ class BufferedChannel(Channel):
         super().__init__(name=name)
 
     @chan_poisoncheck
-    async def _write(self, obj):
+    def _write(self, obj):
         wcmd = _ChanOP(CH_WRITE, obj)
         if (rcmd := self._pop_matching(CH_READ)) is not None:
             return self._rw_nowait(wcmd, rcmd)[0]
