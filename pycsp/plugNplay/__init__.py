@@ -114,12 +114,12 @@ def Successor(cin, cout):
 
 @process
 def SkipProcess():
-    pass
+    """Just an empty process doing nothing"""
 
 
 @process
 def Mux2(cin1, cin2, cout):
     alt = Alternative(cin1, cin2)
     while True:
-        _, val = alt.priSelect()
+        _, val = alt.pri_select()
         cout(val)
