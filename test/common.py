@@ -4,8 +4,6 @@
 # See LICENSE.txt for licensing details (MIT License).
 
 import argparse
-import sys
-sys.path.append("..")   # Trick to import pycsp without setting PYTHONPATH
 import pycsp         # noqa E402
 
 # Common arguments are added and handled here. The general outline for a program is to
