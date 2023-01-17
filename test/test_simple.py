@@ -31,18 +31,25 @@ def schan_test():
     def reader(p, ch):
         pref = "                     " + " " * p * 2
         time.sleep(0.1)
+        rvals = []
         for i in range(10):
             print(f"{pref} R {p} waiting")
             val = ch.read()
+            rvals.append(val)
             print(f"{pref} R {p} got {val}")
             time.sleep(random.random() * 0.5 + 0.5)
 
     ch = Channel()
-    Parallel(writer(1, ch),
-             reader(1, ch),
-             writer(2, ch),
-             reader(2, ch))
+    rets = Parallel(
+        writer(1, ch),
+        reader(1, ch),
+        writer(2, ch),
+        reader(2, ch))
     print("All done")
+    # return vals from reader 1 and 2
+    rvals1, rvals2 = rets[1], rets[3]
+    print(rvals1)
+    print(rvals2)
 
 
 def sguard_test():
