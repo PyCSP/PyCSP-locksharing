@@ -448,7 +448,8 @@ class Channel:
             while len(self.queue) > 0:
                 op = self.queue.popleft()
                 if op.fut:
-                    op.fut.set_result(None)
+                    # Waiting ops should get an exception
+                    op.fut.set_exception(ChannelPoisonException())
                 if op.alt:
                     op.alt.poison(self)
 

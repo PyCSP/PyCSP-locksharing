@@ -7,7 +7,7 @@
 import time
 import common
 import pycsp
-from pycsp import process, Alternative, Parallel
+from pycsp import process, Alternative, Parallel, ChannelPoisonException
 
 N_RUNS    = 10
 N_SELECTS = 10000
@@ -20,16 +20,19 @@ Channel = pycsp.Channel    # in case command line arguments replaced the Channel
 
 
 @process
-def stressed_writer(cout, ready, writer_id):
+def stressed_writer(cout, ready, done, writer_id):
     "Stressed alt writer"
-    ready(42)
-    while True:
-        cout(writer_id)
+    try:
+        ready(writer_id)
+        while True:
+            cout(writer_id)
+    except ChannelPoisonException:
+        done(writer_id)
 
 
 @process
-def stressed_reader(channels, ready, n_writers, writers_per_chan):
-    print("Waiting for all writers to get going")
+def stressed_reader(channels, ready, done, n_writers, writers_per_chan):
+    print("Waiting for all writers to send going")
     for _ in range(n_writers):
         ready()
     print("- writers ready, reader almost ready")
@@ -38,7 +41,7 @@ def stressed_reader(channels, ready, n_writers, writers_per_chan):
     print(f"Total writer procs : {writers_per_chan * len(channels)}")
     alt = Alternative(*[ch.read for ch in channels])
 
-    print("Select using async with : ")
+    print("Select using 'with alt': ")
     for run in range(N_RUNS):
         t1 = time.time()
         for _ in range(N_SELECTS):
@@ -60,19 +63,26 @@ def stressed_reader(channels, ready, n_writers, writers_per_chan):
         us_per_select = 1_000_000 * dt / N_SELECTS
         print(f"Run {run:2}, {N_SELECTS} iters, {us_per_select} us per select/iter")
 
+    print("Poison channels")
     for ch in channels:
         ch.poison()
+    print("Done, witing for writers to terminate")
+    for _ in range(n_writers):
+        done()
+        # print(f"Got termination from {i} {res}")
+    print("- writers terminated")
 
 
 def run_bm():
     ready = Channel("ready")
     chans = [Channel(f'ch {i}') for i in range(N_CHANNELS)]
+    done = Channel("done")
     procs = []
     for cno, ch in enumerate(chans):
         for c_pid in range(N_PROCS_PER_CHAN):
             writer_id = (cno, c_pid)
-            procs.append(stressed_writer(ch.write, ready.write, writer_id))
-    procs.append(stressed_reader(chans, ready.read, N_CHANNELS * N_PROCS_PER_CHAN, N_PROCS_PER_CHAN))
+            procs.append(stressed_writer(ch.write, ready.write, done.write, writer_id))
+    procs.append(stressed_reader(chans, ready.read, done.read, N_CHANNELS * N_PROCS_PER_CHAN, N_PROCS_PER_CHAN))
     Parallel(*procs)
 
 
