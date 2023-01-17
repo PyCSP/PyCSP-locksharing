@@ -93,6 +93,8 @@ class Process(threading.Thread):
                 ch.poison()
 
 
+# TODO: see test_plugnplay.py for comments. Parallel and Sequence are not composable in the same
+# way they are in aPyCSP.
 # pylint: disable-next=C0103
 def Parallel(*processes, check_poison=False):
     """Used to run a set of processes concurrently.

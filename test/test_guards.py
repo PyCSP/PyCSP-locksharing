@@ -5,15 +5,14 @@
 from common import handle_common_args
 import pycsp
 from pycsp import process, Alternative, Sequence
-
-import sys
-print(sys.argv)
 handle_common_args()
 Channel = pycsp.Channel    # in case channel was replaced by command line options
 
 
 def test_timer():
-    print("Checking if Timer() guards can wake up")
+    """Testing the timer guard"""
+    print("\nChecking if Timer() guards can wake up")
+    print("------------------")
 
     @process
     def timeout_reader(pn, ch):
@@ -23,10 +22,27 @@ def test_timer():
         for i in range(5):
             print(" - about to wait with a timeout", i)
             g, ret = alt.select()
-            if isinstance(g, pycsp.Timer):
-                print("    - done", g, g.seconds)
-            else:
-                print("    - done", g, g.seconds)
+            assert g in (t1, t2), "There is no writer on the channel, so should only get timeouts"
+            assert g == t1, "Timer t1 is faster than t2, so it should always be picked"
+            print("    - done", g)
+
+    ch = Channel()
+    Sequence(timeout_reader(1, ch))
+
+
+def test_skip():
+    """Testing the skip guard"""
+    print("\nChecking if skip is always selected in an alt where nobody else is ready")
+    print("------------------")
+
+    @process
+    def timeout_reader(pn, ch):
+        skip = pycsp.Skip()
+        # Put skip last to make sure it is the last option
+        alt = Alternative(ch.read, skip)
+        for i in range(50):
+            g, ret = alt.select()
+            assert g == skip, "Should always pick skip"
 
     ch = Channel()
     Sequence(timeout_reader(1, ch))
@@ -40,3 +56,4 @@ def test_timer():
 
 if __name__ == "__main__":
     test_timer()
+    test_skip()
