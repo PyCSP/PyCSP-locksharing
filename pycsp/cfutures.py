@@ -24,6 +24,30 @@ class CFuture:
 
     In a simple producer-consumer benchmark the overhead of using a condition variable to implement a CFuture is
     50% higher (on the whole benchmark) than using this version of the CFuture.
+
+    The interface is kept simple to avoid complicating the implementation:
+
+    Simple use as a lock:
+         with CFuture() as cf:     # This allocates a CFuture and grabs the shared lock
+              .. do something with the shared lock ...
+
+
+    Using it as a Future to wait for some condition and result:
+        with CFuture() as cf:
+            ... pass the cf object somewhere so some other thread can wake this one up()
+            result = cf.wait()
+            #  you no longer have the lock after calling wait, so the rest of the context
+            #  does not hold the lock
+
+    with CFuture() as cf:
+        with CFuture() as cf:
+            ... do
+            other_cf.set_result('someresult')   # this passes the result and wakes up the waiter
+            # or, to trigger an exception in the waiting object (ex: ChannelPoisonExc)
+            # this will also wake up the waiter, which will be poisoned
+            other_cf.set_exception(exception_object)
+
+    TODO: raise an exception if the future is re_used (wait() or __enter__ is called twice)?
     """
     _global_lock = RLock()  # lock shared by all CFutures
 
@@ -38,8 +62,23 @@ class CFuture:
         self._waiter = None  # we only support one waiter.
         self.result = None   # returned value. Will be set by set_result
         self.waited = False
+        self.exception = None
+        self._done = False
+
+    def done(self):
+        """True if set_exception or set_result has been called on the CFuture"""
+        return self._done
+
+    def set_exception(self, exc):
+        """Stores the exception in the future and wakes up any sleeping waiter.
+        The waiter will then have the exception triggered upon resuming.
+        """
+        self.exception = exc
+        self._notify()
 
     def set_result(self, res):
+        """Sets the result and notifies any waiting process. This should only be done while holding the
+        shared lock."""
         self.result = res
         self._notify()
 
@@ -57,12 +96,15 @@ class CFuture:
         # This will block this thread/method until somebody releases the lock, or continue immediately if
         # another thread managed to release/notify() before this call to acquire.
         waiter.acquire()
+        if self.exception:
+            raise self.exception
         return self.result
 
     def _notify(self):
-        "only notifies the first waiter, there should only be one though"
+        "Only notifies the first waiter, there should only be one though"
         w = self._waiter
         self._waiter = None
+        self._done = True
         w.release()
 
     def __enter__(self):
@@ -70,11 +112,14 @@ class CFuture:
         return self
 
     def __exit__(self, *args):
-        # If self.wait() was called, this CFuture no longer has the shared lock.
-        # TODO: should check if we actually have the shared lock.
         if not self.waited:
             # Only release if wait() was never called, so the shared lock has to be released.
+            # If self.wait() was called, this CFuture no longer has the shared lock.
             self._lock.release()
+
         # args are usually None (no exceptions etc)
         # Return True to suppress execptions.
+        # NB: The exit should not check for exceptions! Otherwise, there might be a race condition
+        # with a reader successfully reading from a channel and then getting poisoned afterwards
+        # if the context is exited a bit afterwards.
         return False
