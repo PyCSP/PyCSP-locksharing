@@ -93,21 +93,43 @@ class Process(threading.Thread):
                 ch.poison()
 
 
-# TODO: see test_plugnplay.py for comments. Parallel and Sequence are not composable in the same
-# way they are in aPyCSP.
-# One problem is the interface:
-# - if Parallel returns a process that can be used further up, it will need to expose
-#   start and join methods and also wait for the start to execute while letting the caller
-#   use join to wait for it to finish.
-# - if Parallel is not to be used further up, it cannot easily do the above because
-#   the caller will never call any of the methods and instead expects Parallel to
-#   work like a function call (start and join the processes before returning).
 # pylint: disable-next=C0103
 def Parallel(*processes, check_poison=False):
     """Used to run a set of processes concurrently.
     Takes a list of processes which are started.
-    Waits for the processes to complete, and returns a list of return values from each process.
-    If check_poison is true, it will raise a ChannelPoison exception if any of the processes have been poisoned.
+    Waits for the processes to complete, and returns a list of return
+    values from each process.
+
+    If check_poison is true, it will raise a ChannelPoison exception if
+    any of the processes have been poisoned.
+
+    WARNING: This is not composable.
+    --------------------------------
+    You cannot use this inside a Parallel or Sequence construct as it:
+    1) returns the return values of the provided processes and not something
+       that looks like a Process.
+    2) waits for all the submitted processes to complete before returning.
+
+    The first issue can be resolved by breaking the old interface: expect a
+    Process-like object that you need to inspect to get the return values
+    instead of getting the return values directly.
+
+    The second problem is harder to resolve: to be used inside a
+    construct like Parallel or Sequence, the Parallel construct would
+    need to return a process like object immediately, not wait for any
+    of the provided processes to start.
+
+    That would make the outermost construct look like a normal thread
+    for the user. To simplify this, a CSP construct could be used
+    to start, join and extract the results like the Parallel construct
+    is doing now:
+
+    CSP(
+       Parallel(...),
+       Sequence(...)
+       )
+
+    Whether CSP should behave like sequence or parallel is a different question.
     """
     # run, then sync with them.
     for p in processes:
@@ -123,8 +145,14 @@ def Parallel(*processes, check_poison=False):
 
 # pylint: disable-next=C0103
 def Sequence(*processes):
-    """Sequence construct. Takes a list of processes (Python threads) which are started.
-    The Sequence construct returns when all given processes exit."""
+    """Used to run a set of processes one by one (waiting for one to complete before starting the next).
+
+    Takes a list of processes (Python threads).
+
+    The Sequence construct returns the return value when all given processes exit.
+
+    WARNING: This is not composable. See the Parallel construct for more information.
+    """
     for p in processes:
         # Call Run directly instead of start() and join()
         p.run()

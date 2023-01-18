@@ -4,7 +4,6 @@
 
 import time
 import random
-import itertools
 from common import handle_common_args
 import pycsp
 from pycsp import process, Alternative, Parallel
@@ -37,7 +36,7 @@ def test_2_readers_and_writers():
         pref = "                     " + " " * p * 2
         time.sleep(0.1)
         rvals = []
-        for i in range(N_VALS):
+        for _ in range(N_VALS):
             print(f"{pref} R {p} waiting")
             val = ch.read()
             rvals.append(val)
