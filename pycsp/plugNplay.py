@@ -78,7 +78,7 @@ def ParDelta2(cin, cout1, cout2):
             writer(cout1, t),
             writer(cout2, t),
             check_poison=True
-        )
+        ).run()
 
 
 @process
@@ -123,3 +123,13 @@ def Mux2(cin1, cin2, cout):
     while True:
         _, val = alt.pri_select()
         cout(val)
+
+
+# Not from JCSP
+@process
+def poison_chans(*chans, verbose=False):
+    """Process used to poison a list of channels"""
+    for ch in chans:
+        if verbose:
+            print("poison_chans() - poison", ch)
+        ch.poison()
