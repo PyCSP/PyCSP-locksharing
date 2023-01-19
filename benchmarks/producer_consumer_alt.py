@@ -59,7 +59,7 @@ def consumer(inputs, n_warm, n_runs, run_no):
     return per_rw
 
 
-def run_bm(producer=rr_producer, N_CHANNELS=5):
+def run_bm(producer=rr_producer, N_CHANNELS=5, print_header=False):
     """Given a producer, run the benchmark and print results usable for a markdown table."""
     N_BM = 10
     N_WARM = 100
@@ -74,16 +74,17 @@ def run_bm(producer=rr_producer, N_CHANNELS=5):
             producer(ch_writes, N_WARM, N_RUN),
             consumer(ch_reads, N_WARM, N_RUN, i)).run().retval
         res.append(rets[-1])
-    print("Res with nchans, min, avg, max")
+    if print_header:
+        print("Res with nchans, min, avg, max")
     print(f"| {producer.__name__}-consumer alt | {N_CHANNELS} | {min(res):7.3f} | {avg(res):7.3f} |{max(res):7.3f} |")
     return rets
 
 
 if __name__ == "__main__":
-    for nc in [1, 2, 4, 6, 8, 10]:
-        run_bm(N_CHANNELS=nc)
-    for nc in [1, 2, 4, 6, 8, 10]:
-        run_bm(producer=alting_producer, N_CHANNELS=nc)
+    for i, nc in enumerate([1, 2, 4, 6, 8, 10]):
+        run_bm(N_CHANNELS=nc, print_header=i == 0)
+    for i, nc in enumerate([1, 2, 4, 6, 8, 10]):
+        run_bm(producer=alting_producer, N_CHANNELS=nc, print_header=i == 0)
 
     if args.profile:
         import cProfile

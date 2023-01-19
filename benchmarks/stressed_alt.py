@@ -5,18 +5,13 @@
 # https://www.researchgate.net/publication/315053019_Development_and_Evaluation_of_a_Modern_CCSP_Library
 
 import time
-import common
 import pycsp
-from pycsp import process, Alternative, Parallel, ChannelPoisonException
+from pycsp import process, Alternative, Parallel, PoisonException, Channel
 
 N_RUNS    = 10
 N_SELECTS = 10000
 N_CHANNELS = 10
 N_PROCS_PER_CHAN = 1000
-
-print("--------------------- Stressed Alt --------------------")
-common.handle_common_args()
-Channel = pycsp.Channel    # in case command line arguments replaced the Channel def
 
 
 @process
@@ -26,7 +21,7 @@ def stressed_writer(cout, ready, done, writer_id):
         ready(writer_id)
         while True:
             cout(writer_id)
-    except ChannelPoisonException:
+    except PoisonException:
         done(writer_id)
 
 
@@ -37,8 +32,10 @@ def stressed_reader(channels, ready, done, n_writers, writers_per_chan):
         ready()
     print("- writers ready, reader almost ready")
 
-    print(f"Setting up alt with {writers_per_chan} procs per channel and {len(channels)} channels.")
-    print(f"Total writer procs : {writers_per_chan * len(channels)}")
+    print("Setting up alt with")
+    print(f"- procs/writers per channel     : {writers_per_chan}")
+    print(f"- number of channels            : {len(channels)}")
+    print(f"- total number of procs/writers : {writers_per_chan * len(channels)}")
     alt = Alternative(*[ch.read for ch in channels])
 
     print("Select using 'with alt': ")
@@ -74,6 +71,7 @@ def stressed_reader(channels, ready, done, n_writers, writers_per_chan):
 
 
 def run_bm():
+    print("--------------------- Stressed Alt --------------------")
     ready = Channel("ready")
     chans = [Channel(f'ch {i}') for i in range(N_CHANNELS)]
     done = Channel("done")
@@ -83,7 +81,7 @@ def run_bm():
             writer_id = (cno, c_pid)
             procs.append(stressed_writer(ch.write, ready.write, done.write, writer_id))
     procs.append(stressed_reader(chans, ready.read, done.read, N_CHANNELS * N_PROCS_PER_CHAN, N_PROCS_PER_CHAN))
-    Parallel(*procs)
+    Parallel(*procs).run()
 
 
 run_bm()
