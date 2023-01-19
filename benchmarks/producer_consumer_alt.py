@@ -7,7 +7,7 @@ Producer-consumer,  but using multiple channels and sending tentative reads and 
 
 
 import time
-from common import handle_common_args, avg
+from pycsp.utils import handle_common_args, avg
 
 print("--------------------- Producer/consumer using alting writer --------------------")
 # Do this before importing pycsp to make sure it is correctly set up (like using the right Channel version)
@@ -70,9 +70,9 @@ def run_bm(producer=rr_producer, N_CHANNELS=5):
 
     res = []
     for i in range(N_BM):
-        rets = Parallel(producer(ch_writes, N_WARM, N_RUN),
-                        consumer(ch_reads, N_WARM, N_RUN, i))
-        # print(rets)
+        rets = Parallel(
+            producer(ch_writes, N_WARM, N_RUN),
+            consumer(ch_reads, N_WARM, N_RUN, i)).run().retval
         res.append(rets[-1])
     print("Res with nchans, min, avg, max")
     print(f"| {producer.__name__}-consumer alt | {N_CHANNELS} | {min(res):7.3f} | {avg(res):7.3f} |{max(res):7.3f} |")

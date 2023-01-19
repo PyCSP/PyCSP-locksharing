@@ -4,7 +4,7 @@
 
 import time
 import random
-from common import handle_common_args
+from pycsp.utils import handle_common_args
 import pycsp
 from pycsp import process, Alternative, Parallel
 
@@ -49,7 +49,7 @@ def test_2_readers_and_writers():
         writer(1, ch),
         reader(1, ch),
         writer(2, ch),
-        reader(2, ch))
+        reader(2, ch)).run().retval
     print("All done")
     # return vals from reader 1 and 2
     rvals1, rvals2 = rets[1], rets[3]
@@ -127,7 +127,7 @@ def test_guarded_channel_ops():
         gwrite(2, ch.write),
         reader(3, ch.read),
         gread(4, ch.read)
-    )
+    ).run().retval
     print("All done")
     # return vals from reader 1 and 2
     rvals1, rvals2 = rets[2], rets[3]

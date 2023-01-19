@@ -17,34 +17,17 @@ from .cfutures import CFuture
 
 # ******************** Core code ********************
 
-class ChannelPoisonException(Exception):
+class PoisonException(Exception):
     """Used to interrupt processes accessing poisoned channels."""
-
-
-def chan_poisoncheck(func):
-    "Decorator for making sure that poisoned channels raise ChannelPoinsonException."
-    @functools.wraps(func)
-    def p_wrap(self, *args, **kwargs):
-        # Only check for poison on entry.
-        # A poison applied to a channel should only influence any operations that sleep
-        # on the channel or ones that try to submit a new operation _after_ the poison
-        # was applied.
-        # Otherwise there might be a race where a successful read/write lets one of the processes
-        # return from the operation and poison the channel before the other process wakes up.
-        # Sometimes the late process would be poisoned on a successful operation, sometimes
-        # it would not.
-        if self.poisoned:
-            raise ChannelPoisonException()
-        return func(self, *args, **kwargs)
-    return p_wrap
 
 
 def process(verbose_poison=False):
     """Decorator for creating process functions.
-    Annotates a function as a process and takes care of poison propagation.
+    Annotates a function as a process and takes care of insulating parents from accidental
+    poison propagation.
 
     If the optional 'verbose_poison' parameter is true, the decorator will print
-    a message when it captures the ChannelPoisonException after the process
+    a message when it captures the PoisonException after the process
     was poisoned.
     """
     def inner_dec(func):
@@ -67,6 +50,8 @@ def process(verbose_poison=False):
     return inner_dec
 
 
+# -------------
+
 class Process(threading.Thread):
     """PyCSP process container. Arguments are: <function>, *args, **kwargs.
     Checks for and propagates channel poison (see Channels.py)."""
@@ -84,17 +69,17 @@ class Process(threading.Thread):
         try:
             # Store the returned value from the process
             self.retval = self.fn(*self.args, **self.kwargs)
-        except ChannelPoisonException:
+        except PoisonException:
             if self.verbose_poison:
                 print(f"Process poisoned: {self.fn}({self.args=}, {self.kwargs=})")
             self.poisoned = True
-            # look for channels and channel ends
-            for ch in [x for x in self.args if isinstance(x, (ChannelEnd, Channel))]:
-                ch.poison()
+        return self
 
 
+# TODO: Consider convenience function CSP that is just return par.run().retval
+# - run should return self 
 # pylint: disable-next=C0103
-def Parallel(*processes, check_poison=False):
+class Parallel(Process):
     """Used to run a set of processes concurrently.
     Takes a list of processes which are started.
     Waits for the processes to complete, and returns a list of return
@@ -103,61 +88,89 @@ def Parallel(*processes, check_poison=False):
     If check_poison is true, it will raise a ChannelPoison exception if
     any of the processes have been poisoned.
 
-    WARNING: This is not composable.
-    --------------------------------
-    You cannot use this inside a Parallel or Sequence construct as it:
-    1) returns the return values of the provided processes and not something
-       that looks like a Process.
-    2) waits for all the submitted processes to complete before returning.
+    WARNING: To make this composable required a change in how Parallel and
+    Sequence are used: The outer construct must be executed by calling
+    the run() method after creating the Parallel object.
 
-    The first issue can be resolved by breaking the old interface: expect a
-    Process-like object that you need to inspect to get the return values
-    instead of getting the return values directly.
+    For example, a Parallel inside a Parallel:
 
-    The second problem is harder to resolve: to be used inside a
-    construct like Parallel or Sequence, the Parallel construct would
-    need to return a process like object immediately, not wait for any
-    of the provided processes to start.
+    Parallel(
+       Parallel(
+          writer(ch),
+          writer(ch)),
+       reader(ch)
+    ).run()
 
-    That would make the outermost construct look like a normal thread
-    for the user. To simplify this, a CSP construct could be used
-    to start, join and extract the results like the Parallel construct
-    is doing now:
+    Any Parallel or Sequence used inside the composition will have this
+    executed by the threads spawned for them.
 
-    CSP(
-       Parallel(...),
-       Sequence(...)
-       )
+    The run method returns the Par or Seq itself. This makes it possible to
+    use it as a chainable or extract the results as, for example, the
+    following:
 
-    Whether CSP should behave like sequence or parallel is a different question.
+       rets = Parallel( .... .).run().retval.
     """
-    # run, then sync with them.
-    for p in processes:
-        p.start()
-    for p in processes:
-        p.join()
-    # return a list of the return values from the processes
-    if check_poison:
-        if any(p.poisoned for p in processes):
-            raise ChannelPoisonException()
-    return [p.retval for p in processes]
+    def __init__(self, *processes, check_poison=False):
+        super().__init__(None, False)
+        self.processes = processes
+
+    def run(self):
+        # run, then sync with them.
+        for p in self.processes:
+            p.start()
+        for p in self.processes:
+            p.join()
+        # retval is set to the return values from the processes, in the same
+        # order as the processes were originally specified.
+        self.retval = [p.retval for p in self.processes]
+        return self
 
 
 # pylint: disable-next=C0103
-def Sequence(*processes):
+class Sequence(Process):
     """Used to run a set of processes one by one (waiting for one to complete before starting the next).
 
     Takes a list of processes (Python threads).
 
     The Sequence construct returns the return value when all given processes exit.
 
-    WARNING: This is not composable. See the Parallel construct for more information.
+    WARNING: This is now composable, which required a change to how it is used. See the docstring
+    for Parallel for more information.
     """
-    for p in processes:
-        # Call Run directly instead of start() and join()
-        p.run()
-    # return a list of the return values from the processes
-    return [p.retval for p in processes]
+    def __init__(self, *processes):
+        super().__init__(None, False)
+        self.processes = processes
+
+    def run(self):
+        for p in self.processes:
+            # Call Run directly instead of start() and join()
+            # This saves some overhead, but PoisonException can suddenly be exposed here,
+            # so this must be handled specifically
+            try:
+                p.run()
+            except PoisonException:
+                print("Sequence.run() caught poison exception. TODO: consider flagging p as poisoned?")
+                pass
+        # retval is set to the return values from the processes, in the same
+        # order as the processes were originally specified.
+        self.retval = [p.retval for p in self.processes]
+        return self
+
+
+def CSP(*procs):
+    """Convenience function for running one or more processes
+    or Seq / Pars and fetching the result.
+
+    Each specified argument can be a Process, Sequence or Parallel.
+
+    If only one is specified, the run() method of the specified object is executed.
+
+    If multiple procs are specified, it will run everything in parallel,
+    wrapping it in a Parallel.
+    """
+    if len(procs) == 1:
+        return procs[0].run().retval
+    return Parallel(*procs).run().retval
 
 
 # pylint: disable-next=C0103
@@ -362,6 +375,13 @@ class ChannelReadEnd(ChannelEnd, Guard):
         return self
 
     def __next__(self):
+        if self._chan.poisoned:
+            raise StopIteration
+        try:
+            return self._chan._read()
+        except PoisonException:
+            # The iterator interface should not terminate using PoisonException
+            raise StopIteration
         return self._chan._read()
 
 
@@ -450,9 +470,10 @@ class Channel:
     # NB: See docstring for the channels. The queue is either empty, or it has
     # a number of queued operations of a single type. There is never both a
     # read and a write in the same queue.
-    @chan_poisoncheck
     def _read(self):
         with CFuture() as c:
+            if self.poisoned:
+                raise PoisonException
             rcmd = _ChanOP(CH_READ, None)
             if (wcmd := self._pop_matching(CH_WRITE)) is not None:
                 # Found a match
@@ -462,9 +483,10 @@ class Channel:
             self._queue_waiting_op(rcmd, c)
             return c.wait()
 
-    @chan_poisoncheck
     def _write(self, obj):
         with CFuture() as c:
+            if self.poisoned:
+                raise PoisonException
             wcmd = _ChanOP(CH_WRITE, obj)
             if (rcmd := self._pop_matching(CH_READ)) is not None:
                 return self._rw_nowait(wcmd, rcmd)[0]
@@ -486,7 +508,7 @@ class Channel:
                 op = self.queue.popleft()
                 if op.fut:
                     # Waiting ops should get an exception
-                    op.fut.set_exception(ChannelPoisonException())
+                    op.fut.set_exception(PoisonException())
                 if op.alt:
                     op.alt.poison(self)
 
@@ -502,7 +524,7 @@ class Channel:
     def renable(self, alt):
         """enable for the input/read end"""
         if self.poisoned:
-            raise ChannelPoisonException(f"renable on channel {self} {alt=}")
+            raise PoisonException(f"renable on channel {self} {alt=}")
         rcmd = _ChanOP(CH_READ, None)
         if (wcmd := self._pop_matching(CH_WRITE)) is not None:
             # Found a match
@@ -521,7 +543,7 @@ class Channel:
     def wenable(self, alt, pguard):
         """Enable write guard."""
         if self.poisoned:
-            raise ChannelPoisonException(f"wenable on channel {self} {alt=} {pguard=}")
+            raise PoisonException(f"wenable on channel {self} {alt=} {pguard=}")
 
         wcmd = _ChanOP(CH_WRITE, pguard.obj)
         if (rcmd := self._pop_matching(CH_READ)) is not None:
@@ -544,7 +566,13 @@ class Channel:
         return self
 
     def __next__(self):
-        return self._read()
+        if self.poisoned:
+            raise StopIteration
+        try:
+            return self._read()
+        except PoisonException:
+            # The iterator interface should not terminate using PoisonException
+            raise StopIteration
 
     def verify(self):
         """Checks the state of the channel using assert."""
@@ -575,8 +603,9 @@ class BufferedChannel(Channel):
     def __init__(self, name=""):
         super().__init__(name=name)
 
-    @chan_poisoncheck
     def _write(self, obj):
+        if self.poisoned:
+            raise PoisonException
         wcmd = _ChanOP(CH_WRITE, obj)
         if (rcmd := self._pop_matching(CH_READ)) is not None:
             return self._rw_nowait(wcmd, rcmd)[0]
@@ -637,7 +666,7 @@ class Alternative:
                     self.state = self._ALT_READY
                     return (g, ret)
             return (None, None)
-        except ChannelPoisonException as e:
+        except PoisonException as e:
             # Disable any enabled guards.
             self._disable_guards()
             self.state = self._ALT_INACTIVE
@@ -730,7 +759,7 @@ class Alternative:
         self._disable_guards()
         if self.wait_fut.done():
             print("WARNING: alt.wait_fut was already done in alt.poison. This will raise an exception.")
-        self.wait_fut.set_exception(ChannelPoisonException(msg))
+        self.wait_fut.set_exception(PoisonException(msg))
 
     # Support for context managers. Instead of the following:
     #    (g, ret) = ALT.select():

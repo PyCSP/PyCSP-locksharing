@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import time
-from common import handle_common_args, avg
+
 import pycsp                                      # noqa : E402
 from pycsp import process, Parallel               # noqa : E402
+from pycsp.utils import handle_common_args, avg
 
 print("--------------------- Producer/consumer --------------------")
 
@@ -47,7 +48,7 @@ def run_bm():
     for i in range(N_BM):
         rets = Parallel(
             producer(chan.write, N_WARM, N_RUN),
-            consumer(chan.read, N_WARM, N_RUN, i))
+            consumer(chan.read, N_WARM, N_RUN, i)).run().retval
         # print(rets)
         res.append(rets[-1])
     print("Res with min, avg, max")

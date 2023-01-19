@@ -5,15 +5,13 @@ Copyright (c) 2018 John Markus Bjørndalen, jmb@cs.uit.no.
 See LICENSE.txt for licensing details (MIT License).
 """
 import time
-from common import avg, handle_common_args
-# pylint: disable-next=wrong-import-order
 import pycsp
-# pylint: disable-next=wrong-import-order
+from pycsp.utils import avg, handle_common_args
 from pycsp import process, Parallel
 
-handle_common_args()
-
 # pylint: disable=invalid-name
+
+handle_common_args()
 
 
 @process
@@ -72,7 +70,7 @@ def run_timing(read_end, write_end):
         # t1 = time.time()
         t1, t2 = Parallel(
             writer_timed(N, write_end),
-            reader_timed(N, read_end))
+            reader_timed(N, read_end)).run().retval
         # t2 = time.time()
         dt_ms    = (t2 - t1) * 1000
         dt_op_us = (dt_ms / N) * 1000
@@ -85,7 +83,7 @@ print("Warming up")
 NWARM = 10
 chan = pycsp.Channel('a')
 Parallel(writer(NWARM, chan.write),
-         reader_verb(NWARM, chan.read))
+         reader_verb(NWARM, chan.read)).run().retval
 print("timing with channel ends")
 run_timing(chan.read, chan.write)
 

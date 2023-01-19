@@ -2,7 +2,7 @@
 
 # ############################################################
 
-from common import handle_common_args
+from pycsp.utils import handle_common_args
 import pycsp
 from pycsp import process, Alternative, Sequence
 handle_common_args()
@@ -27,7 +27,7 @@ def test_timer():
             print("    - done", g)
 
     ch = Channel()
-    Sequence(timeout_reader(1, ch))
+    Sequence(timeout_reader(1, ch)).run()
 
 
 def test_skip():
@@ -45,7 +45,7 @@ def test_skip():
             assert g == skip, "Should always pick skip"
 
     ch = Channel()
-    Sequence(timeout_reader(1, ch))
+    Sequence(timeout_reader(1, ch)).run()
 
 
 # TODO:

@@ -14,10 +14,10 @@
 
 import os
 import time
-from common import handle_common_args
+from pycsp.utils import handle_common_args
 import pycsp
-from pycsp import process, Parallel
-from pycsp.plugNplay import Prefix, Delta2, Successor
+from pycsp import process, Parallel, Sequence
+from pycsp.plugNplay import Prefix, Delta2, Successor, poison_chans
 
 print("--------------------- Commstime --------------------")
 handle_common_args()
@@ -40,7 +40,6 @@ def consumer(cin, run_no):
     tchan_us = tchan * 1_000_000
     print(f"Run {run_no} DT = {dt:.4f}. Time per ch : {dt:.4f}/(4*{N}) = {tchan:.8f} s = {tchan_us:.4f} us")
     # print("consumer done, posioning channel")
-    cin.poison()
     return tchan
 
 
@@ -51,11 +50,15 @@ def CommsTimeBM(run_no, Delta2=Delta2):
     c = Channel("c")
     d = Channel("d")
 
-    rets = Parallel(Prefix(c.read, a.write, prefixItem=0),  # initiator
-                    Delta2(a.read, b.write, d.write),       # forwarding to two
-                    Successor(b.read, c.write),             # feeding back to prefix
-                    consumer(d.read, run_no))               # timing process
-    return rets[-1]
+    rets = Parallel(
+        Prefix(c.read, a.write, prefixItem=0),  # initiator
+        Delta2(a.read, b.write, d.write),       # forwarding to two
+        Successor(b.read, c.write),             # feeding back to prefix
+        Sequence(
+            consumer(d.read, run_no),           # timing process
+            poison_chans(a, b, c, d)),
+    ).run().retval
+    return rets[-1][0]  # return the results from consumer
 
 
 def run_bm(Delta2=pycsp.plugNplay.Delta2):

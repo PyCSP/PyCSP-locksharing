@@ -4,7 +4,7 @@ import time
 import threading
 from threading import RLock
 from pycsp.cfutures import CFuture
-from pycsp import ChannelPoisonException
+from pycsp import PoisonException
 
 SLOW_WAIT = 0.4
 FAST_WAIT = 0.2
@@ -21,7 +21,7 @@ def f1(cf, sl, state_exit):
             ret = cf.wait()
             print("f1 got ", ret, "from wait")
             state_exit['retval'] = ret
-    except ChannelPoisonException as cp:
+    except PoisonException as cp:
         print("f1 got exception")
         state_exit['exception'] = cp
 
@@ -42,7 +42,7 @@ def sets_exception(cf, sl):
         print("f2 sleeping")
         time.sleep(FAST_WAIT)
         print("f2 woke up, setting exception in cf")
-        cf.set_exception(ChannelPoisonException("catch this"))
+        cf.set_exception(PoisonException("catch this"))
         print("f2 done")
 
 
@@ -80,7 +80,7 @@ def test_cfuture_pass_exception():
         t.start()
     for t in threads:
         t.join()
-    assert isinstance(state_exit['exception'], ChannelPoisonException), f"waiter should have set exception, got {state_exit}"
+    assert isinstance(state_exit['exception'], PoisonException), f"waiter should have set exception, got {state_exit}"
     assert 'retval' not in state_exit, f"waiter should not have set result, got {state_exit}"
 
 
