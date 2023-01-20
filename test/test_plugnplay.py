@@ -3,7 +3,7 @@
 """Testing the plugNplay module.
 """
 
-from pycsp import Channel, process, Parallel, Sequence
+from pycsp import Channel, process, Parallel, Sequence, CSP, Process
 from pycsp.plugNplay import Identity, Prefix, Delta2, ParDelta2, SeqDelta2, AltDelta2
 from pycsp.plugNplay import Successor, SkipProcess, Mux2, poison_chans
 
@@ -171,20 +171,33 @@ def test_mux2():
     ch1 = Channel('ch1')
     ch2 = Channel('ch2')
     ch3 = Channel('ch3')
-    rets = Parallel(
-        Sequence(
-            Parallel(
-                write_vals(gen_vals(1), ch1.write),
-                write_vals(gen_vals(2), ch2.write)),
-            poison_chans(ch1)),
-        Sequence(
-            Mux2(ch1.read, ch2.read, ch3.write),
-            poison_chans(ch2, ch3)),
-        read_n(len(vals) * 2, ch3.read)).run().retval
+    rets = CSP(
+        Parallel(
+            Sequence(
+                Parallel(
+                    write_vals(gen_vals(1), ch1.write),
+                    write_vals(gen_vals(2), ch2.write)),
+                poison_chans(ch1)),
+            Sequence(
+                Mux2(ch1.read, ch2.read, ch3.write),
+                poison_chans(ch2, ch3)),
+            read_n(len(vals) * 2, ch3.read)))
     print("Got from reader", rets[-1])
     rvals = sorted(rets[-1])
     expected = sorted(gen_vals(1) + gen_vals(2))
     assert rvals == expected, f"Expected to get all values sent from writer. Got {rets[-1]}"
+
+
+def test_skip():
+    print("\nTesting Successor")
+    print("-------------------")
+
+    process_net = Sequence(SkipProcess())
+    process_net.run()
+
+    # Not much to test for the Skip process. Just check that it's there.
+    assert isinstance(process_net, Sequence)
+    assert isinstance(process_net.processes[0], Process)
 
 
 if __name__ == "__main__":
@@ -196,3 +209,4 @@ if __name__ == "__main__":
     test_alt_delta2()
     test_successor()
     test_mux2()
+    test_skip()
