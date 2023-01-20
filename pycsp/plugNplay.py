@@ -114,7 +114,7 @@ def Successor(cin, cout):
 
 @process
 def SkipProcess():
-    """Just an empty process doing nothing"""
+    """Process that doesn't do anything"""
 
 
 @process
