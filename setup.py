@@ -8,7 +8,7 @@ from setuptools import setup
 
 setup(
     name='pycsp',
-    version='0.2.0',
+    version='0.9.0',
     description='PyCSP - Python CSP Library',
     author='John Markus Bjørndalen',
     author_email='jmb@cs.uit.no',
