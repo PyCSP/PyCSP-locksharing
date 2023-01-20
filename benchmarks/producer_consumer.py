@@ -2,13 +2,11 @@
 # -*- coding: utf-8 -*-
 
 import time
-
 import pycsp                                      # noqa : E402
 from pycsp import process, Parallel               # noqa : E402
 from pycsp.utils import handle_common_args, avg
 
 print("--------------------- Producer/consumer --------------------")
-
 args = handle_common_args([
     (("-profile",), dict(help="profile", action="store_const", const=True, default=False)),
 ])
@@ -25,11 +23,11 @@ def producer(cout, n_warm, n_runs):
 
 @process
 def consumer(cin, n_warm, n_runs, run_no):
-    for i in range(n_warm):
+    for _ in range(n_warm):
         cin()
     ts = time.time
     t1 = ts()
-    for i in range(n_runs):
+    for _ in range(n_runs):
         cin()
     t2 = ts()
     dt = (t2 - t1) * 1_000_000  # in microseconds

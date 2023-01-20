@@ -11,13 +11,15 @@
   Succ <------- c --------|
 
 """
-
-import os
+import sys
 import time
-from pycsp.utils import handle_common_args
+import cProfile
+import pstats
 import pycsp
+from pycsp.utils import handle_common_args
 from pycsp import process, Parallel, Sequence
-from pycsp.plugNplay import Prefix, Delta2, Successor, poison_chans
+from pycsp import plugNplay
+from pycsp.plugNplay import Prefix, Successor, poison_chans
 
 print("--------------------- Commstime --------------------")
 handle_common_args()
@@ -38,13 +40,14 @@ def consumer(cin, run_no):
     dt = t2 - t1
     tchan = dt / (4 * N)
     tchan_us = tchan * 1_000_000
-    print(f"Run {run_no} DT = {dt:.4f}. Time per ch : {dt:.4f}/(4*{N}) = {tchan:.8f} s = {tchan_us:.4f} us")
+    print(f"Run {run_no} DT = {dt:.4f}.  Time per ch : {dt:.4f}/(4*{N}) = {tchan:.8f} s = {tchan_us:.4f} us")
     # print("consumer done, posioning channel")
     return tchan
 
 
-def CommsTimeBM(run_no, Delta2=Delta2):
-    # Create channels
+# pylint: disable-next=redefined-outer-name, invalid-name
+def comms_time_bm(run_no, Delta2=plugNplay.Delta2):
+    """Run the benchmark witht the provided Delta2 implementation (default=Delta2)"""
     a = Channel("a")
     b = Channel("b")
     c = Channel("c")
@@ -56,36 +59,38 @@ def CommsTimeBM(run_no, Delta2=Delta2):
         Successor(b.read, c.write),             # feeding back to prefix
         Sequence(
             consumer(d.read, run_no),           # timing process
-            poison_chans(a, b, c, d)),
-    ).run().retval
+            poison_chans(a, b, c, d)
+    )).run().retval
     return rets[-1][0]  # return the results from consumer
 
 
-def run_bm(Delta2=pycsp.plugNplay.Delta2):
+# pylint: disable-next=redefined-outer-name, invalid-name
+def run_bm(Delta2=plugNplay.Delta2):
+    "Run the benchmark a number of times to check variation in execution time"
     print(f"Running with Delta2 = {Delta2}")
     N_BM = 10
     tchans = []
     for i in range(N_BM):
-        tchans.append(CommsTimeBM(i, Delta2))
-    print("Min {:7.3f}  Avg {:7.3f} Max {:7.3f}".format(1_000_000 * min(tchans),
-                                                        1_000_000 * sum(tchans) / len(tchans),
-                                                        1_000_000 * max(tchans)))
-
-
-run_bm(pycsp.plugNplay.ParDelta2)
-run_bm(pycsp.plugNplay.SeqDelta2)
-run_bm(pycsp.plugNplay.AltDelta2)
-# A bit of a hack, but windows does not have uname()
-try:
-    os.uname()
-except AttributeError:
-    print("Sleeping for a while to allow MS Windows users to read benchmark results")
-    time.sleep(15)
+        tchans.append(comms_time_bm(i, Delta2))
+    t_min = 1_000_000 * min(tchans)
+    t_avg = 1_000_000 * sum(tchans) / len(tchans)
+    t_max = 1_000_000 * max(tchans)
+    print(f"Min {t_min:7.3f}  Avg {t_avg:7.3f} Max {t_max:7.3f}")
+    return (t_min, t_avg, t_max)
 
 
 def run_cprofile():
-    import cProfile
+    "Run commstime through cProfile"
     cProfile.run("commstime_bm()", 'commstime.prof')
-    import pstats
     p = pstats.Stats('commstime.prof')
     p.strip_dirs().sort_stats('cumtime').print_stats()
+
+
+tpd = run_bm(plugNplay.ParDelta2)
+tsd = run_bm(plugNplay.SeqDelta2)
+tad = run_bm(plugNplay.AltDelta2)
+hdrs = ['    min', '    avg', '    max'] * 3
+vals = tpd + tsd + tad
+print("For easier markdown tables:")
+print("| " + " | ".join([" ".join(sys.argv)] + hdrs) + " |")
+print("| " + " | ".join([" ".join(sys.argv)] + [f"{v:7.3f}" for v in vals]) + " |")

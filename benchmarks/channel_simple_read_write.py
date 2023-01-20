@@ -83,7 +83,7 @@ print("Warming up")
 NWARM = 10
 chan = pycsp.Channel('a')
 Parallel(writer(NWARM, chan.write),
-         reader_verb(NWARM, chan.read)).run().retval
+         reader_verb(NWARM, chan.read)).run()
 print("timing with channel ends")
 run_timing(chan.read, chan.write)
 

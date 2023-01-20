@@ -5,7 +5,7 @@
 Producer-consumer,  but using multiple channels and sending tentative reads and writes to all of them using alt/select.
 """
 
-
+import sys
 import time
 from pycsp.utils import handle_common_args, avg
 
@@ -76,7 +76,8 @@ def run_bm(producer=rr_producer, N_CHANNELS=5, print_header=False):
         res.append(rets[-1])
     if print_header:
         print("Res with nchans, min, avg, max")
-    print(f"| {producer.__name__}-consumer alt | {N_CHANNELS} | {min(res):7.3f} | {avg(res):7.3f} |{max(res):7.3f} |")
+    args = " ".join(sys.argv[1:])
+    print(f"| {producer.__name__}-consumer alt {args} | {N_CHANNELS} | {min(res):7.3f} | {avg(res):7.3f} |{max(res):7.3f} |")
     return rets
 
 

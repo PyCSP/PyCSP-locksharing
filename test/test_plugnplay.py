@@ -2,7 +2,6 @@
 
 """Testing the plugNplay module.
 """
-
 from pycsp import Channel, process, Parallel, Sequence, CSP, Process
 from pycsp.plugNplay import Identity, Prefix, Delta2, ParDelta2, SeqDelta2, AltDelta2
 from pycsp.plugNplay import Successor, SkipProcess, Mux2, poison_chans

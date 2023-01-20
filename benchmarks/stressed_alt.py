@@ -5,7 +5,6 @@
 # https://www.researchgate.net/publication/315053019_Development_and_Evaluation_of_a_Modern_CCSP_Library
 
 import time
-import pycsp
 from pycsp import process, Alternative, Parallel, PoisonException, Channel
 
 N_RUNS    = 10
@@ -27,6 +26,8 @@ def stressed_writer(cout, ready, done, writer_id):
 
 @process
 def stressed_reader(channels, ready, done, n_writers, writers_per_chan):
+    """Measure the time to run either 'async with alt' or 'alt.select.
+    """
     print("Waiting for all writers to send going")
     for _ in range(n_writers):
         ready()
@@ -71,6 +72,7 @@ def stressed_reader(channels, ready, done, n_writers, writers_per_chan):
 
 
 def run_bm():
+    """Sets up and runs the benchmark"""
     print("--------------------- Stressed Alt --------------------")
     ready = Channel("ready")
     chans = [Channel(f'ch {i}') for i in range(N_CHANNELS)]
@@ -80,7 +82,7 @@ def run_bm():
         for c_pid in range(N_PROCS_PER_CHAN):
             writer_id = (cno, c_pid)
             procs.append(stressed_writer(ch.write, ready.write, done.write, writer_id))
-    procs.append(stressed_reader(chans, ready.read, done.read, N_CHANNELS * N_PROCS_PER_CHAN, N_PROCS_PER_CHAN))
+    procs.append(stressed_reader(chans, ready.read, done.read, N_CHANNELS * N_PROCS_PER_CHAN,  N_PROCS_PER_CHAN))
     Parallel(*procs).run()
 
 
