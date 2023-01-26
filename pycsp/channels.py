@@ -104,7 +104,6 @@ class ChannelReadEnd(ChannelEnd, Guard):
         except PoisonException:
             # The iterator interface should not terminate using PoisonException
             raise StopIteration
-        return self._chan._read()
 
 
 class _ChanOpcode(Enum):

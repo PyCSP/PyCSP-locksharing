@@ -2,6 +2,10 @@
 
 """
 Implementation of CFuture.
+
+The inspiration for this was from /usr/lib/python3.6/concurrent/futures/_base.py
+that uses an an internal (non-shared) lock. You can't specify a lock you want to use.
+
 """
 
 import _thread
